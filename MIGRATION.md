@@ -21,9 +21,26 @@ only a human (or a PAT/deploy key with `workflows: write`) can do.
 
 ## Steps
 
-1. **Create the dedicated repo** — `<owner>/claude-pipeline`, public (a
-   private repo restricts which other repos may call it, via org settings
-   that need to be set up separately).
+1. **Create the dedicated repo** — `<owner>/claude-pipeline`. **Make it
+   public** unless *every* consumer repo is private (see below). The repo
+   holds no secrets — each consumer carries its own `CLAUDE_CODE_OAUTH_TOKEN`
+   — so public is the low-risk default and the only option that works for
+   public consumers.
+
+   **Public vs. private — the hard GitHub rule:** a **public** repo can
+   *never* call a reusable workflow or composite action stored in a
+   **private** repo, even when both are owned by the same account. There is
+   no setting that lifts this; a public caller fails with "workflow not
+   found." So:
+   - **Any public consumer repo** → `claude-pipeline` **must be public**.
+   - **All consumers private** → `claude-pipeline` may be private, but you
+     must turn on cross-repo sharing (off by default): in `claude-pipeline`
+     go to **Settings → Actions → General → Access** and choose
+     **"Accessible from repositories owned by the user `<owner>`"**. That one
+     setting covers both the reusable workflow (`claude.yml`) and the
+     `log-model` / `report-failure` composite actions, and it only ever
+     grants access to *private* repos owned by `<owner>` — never public ones,
+     and never repos owned by a different user or org.
 
 2. **Copy the reusable workflow.**
    - Copy `reusable-claude.yml.template` from this folder to
