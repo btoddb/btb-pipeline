@@ -24,10 +24,14 @@ fixed per phase (you do not, and cannot, switch models yourself mid-run):
 | PR comment / PR review | `@claude` | Conversational reply — **Opus** for a submitted review, **Sonnet** for follow-up comments |
 
 The subcommand is the word immediately after `@claude`; bare `@claude` defaults to
-the full pipeline. `@claude implement` bypasses the no-questions gate — it's an
-explicit instruction to build the most recent plan as-is. `@claude plan` /
-`@claude implement` are issue-only and `@claude review` is PR-only; a subcommand
-used in the wrong context falls back to that context's bare-`@claude` behavior.
+the full pipeline (on an issue) or a conversational reply (on a PR). `@claude
+implement` bypasses the no-questions gate — it's an explicit instruction to build
+the most recent plan as-is. `@claude plan` / `@claude implement` are issue-only and
+`@claude review` is PR-only. A subcommand used in the wrong context (e.g. `@claude
+implement` on a PR, `@claude review` on an issue) or one that isn't recognized does
+**not** silently fall back: the `notify` job posts a comment explaining that nothing
+ran and lists the valid commands. A plain comment with no `@claude` mention never
+starts the pipeline at all.
 
 So planning is no longer tied to issue-open: commenting `@claude` (or `@claude
 plan`) on an already-open issue triggers it too. Adding more parameters later is

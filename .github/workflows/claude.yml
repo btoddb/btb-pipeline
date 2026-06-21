@@ -94,17 +94,24 @@ concurrency:
 
 jobs:
   dispatch:
+    # Only fire when the text that actually triggered this event mentions
+    # @claude. Checking issue.body/title for *comment* events would let any
+    # unrelated comment on an @claude-titled issue start (and silently skip)
+    # the pipeline; gating per event keeps route=skip from ever happening.
     if: |
-      contains(github.event.comment.body, '@claude') ||
-      contains(github.event.review.body, '@claude') ||
-      contains(github.event.issue.body, '@claude') ||
-      contains(github.event.issue.title, '@claude')
+      (github.event_name == 'issues' &&
+        (contains(github.event.issue.title, '@claude') || contains(github.event.issue.body, '@claude'))) ||
+      ((github.event_name == 'issue_comment' || github.event_name == 'pull_request_review_comment') &&
+        contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review' &&
+        contains(github.event.review.body, '@claude'))
     runs-on: ubuntu-latest
     permissions:
       contents: read
     outputs:
       route: ${{ steps.route.outputs.route }}
       plan_only: ${{ steps.route.outputs.plan_only }}
+      notify_reason: ${{ steps.route.outputs.notify_reason }}
     steps:
       - name: Route the @claude command
         id: route
@@ -131,28 +138,64 @@ jobs:
             issue_comment) if [ -n "$PR_URL" ]; then is_pr=true; fi ;;
           esac
 
+          # Lowercase copy, and the first whitespace-delimited word right after
+          # the first @claude mention ("" = bare @claude / no subcommand).
+          lc="$(printf '%s' "$text" | tr '[:upper:]' '[:lower:]')"
+          cmd="$(printf '%s' "$lc" | grep -oE '@claude[[:space:]]+[a-z]+' | head -n1 \
+            | sed -E 's/^@claude[[:space:]]+//' || true)"
+
           route=skip
           plan_only=false
-          if printf '%s' "$text" | grep -qi '@claude'; then
+          notify_reason=""
+          if printf '%s' "$lc" | grep -q '@claude'; then
             if [ "$is_pr" = true ]; then
-              if printf '%s' "$text" | grep -qiE '@claude[[:space:]]+review([[:space:]]|$)'; then
-                route=review
-              else
-                route=respond
-              fi
-            elif printf '%s' "$text" | grep -qiE '@claude[[:space:]]+plan([[:space:]]|$)'; then
-              route=plan
-              plan_only=true
-            elif printf '%s' "$text" | grep -qiE '@claude[[:space:]]+implement([[:space:]]|$)'; then
-              route=implement
+              case "$cmd" in
+                review)         route=review ;;
+                "")             route=respond ;;
+                plan|implement) route=notify; notify_reason=pr_pipeline ;;
+                *)              route=notify; notify_reason=unknown ;;
+              esac
             else
-              route=plan
+              case "$cmd" in
+                plan)           route=plan; plan_only=true ;;
+                implement)      route=implement ;;
+                "")             route=plan ;;
+                review)         route=notify; notify_reason=issue_review ;;
+                *)              route=notify; notify_reason=unknown ;;
+              esac
             fi
           fi
 
           echo "route=$route" >> "$GITHUB_OUTPUT"
           echo "plan_only=$plan_only" >> "$GITHUB_OUTPUT"
-          echo "Routed event '$EVENT' (is_pr=$is_pr) -> route=$route plan_only=$plan_only"
+          echo "notify_reason=$notify_reason" >> "$GITHUB_OUTPUT"
+          echo "Routed event '$EVENT' (is_pr=$is_pr cmd='$cmd') -> route=$route plan_only=$plan_only notify_reason=$notify_reason"
+
+  notify:
+    needs: dispatch
+    if: needs.dispatch.outputs.route == 'notify'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Explain why nothing ran
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+          REASON: ${{ needs.dispatch.outputs.notify_reason }}
+        run: |
+          set -euo pipefail
+          case "$REASON" in
+            pr_pipeline)
+              body=$'🤖 `@claude plan` and `@claude implement` run on **issues**, not pull requests — there is no plan/implement pipeline for a PR, so nothing ran.\n\nOn a pull request you can:\n- comment `@claude review` for a code review, or\n- comment `@claude <your question or request>` and I will respond here.\n\nTo build something new, open an issue and comment `@claude`.' ;;
+            issue_review)
+              body=$'🤖 `@claude review` runs on **pull requests**, not issues, so nothing ran.\n\nOn an issue, comment `@claude` (full pipeline), `@claude plan`, or `@claude implement`.' ;;
+            *)
+              body=$'🤖 I did not recognize that `@claude` command, so nothing ran. Recognized commands:\n- `@claude` — full pipeline (plan → implement) on an issue\n- `@claude plan` — planning only (issue)\n- `@claude implement` — implement the latest plan (issue)\n- `@claude review` — review a pull request\n\nOn a pull request, `@claude <message>` responds to the conversation.' ;;
+          esac
+          gh issue comment "$NUMBER" --repo "$REPO" --body "$body"
 
   respond:
     needs: dispatch
