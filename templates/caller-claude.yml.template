@@ -27,7 +27,7 @@ concurrency:
 
 jobs:
   claude:
-    uses: <OWNER>/<PIPELINE_REPO>/.github/workflows/claude.yml@v1
+    uses: btoddb/claude-pipeline/.github/workflows/claude.yml@v0.1.0
     permissions:
       contents: write
       pull-requests: write
