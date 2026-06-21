@@ -88,10 +88,6 @@ on:
       CLAUDE_CODE_OAUTH_TOKEN:
         required: true
 
-concurrency:
-  group: claude-${{ github.event.issue.number || github.event.pull_request.number }}
-  cancel-in-progress: false
-
 jobs:
   dispatch:
     # Only fire when the text that actually triggered this event mentions
