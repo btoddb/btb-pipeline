@@ -1,0 +1,440 @@
+# Reusable `@claude` pipeline — workflow_call version of this repo's
+# .github/workflows/claude.yml, converted to be shared across repos.
+#
+# This file is a TEMPLATE, not an active workflow: rename it to
+# `.github/workflows/claude.yml` inside the new dedicated pipeline repo
+# (e.g. <owner>/claude-pipeline). It cannot be dropped into this repo as-is —
+# GitHub Apps cannot author files under .github/workflows/, which is exactly
+# why this stays a template here. See MIGRATION.md in this folder.
+#
+# Replace every `<OWNER>/<PIPELINE_REPO>` below with the dedicated repo's
+# actual owner/name once it exists, then tag the repo `v1`.
+
+name: Claude Code (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      maintainer:
+        description: GitHub username to @-mention on hard failures and parked plans
+        type: string
+        required: true
+      setup:
+        description: Language runtime to set up before lint/test phases ("python", "node", or "none")
+        type: string
+        required: false
+        default: "none"
+      python-version:
+        type: string
+        required: false
+        default: "3.14"
+      node-version:
+        type: string
+        required: false
+        default: "22"
+      install-command:
+        description: Shell command to install dependencies (run from the repo root after setup)
+        type: string
+        required: false
+        default: ""
+      plan-allowed-tools:
+        description: Extra --allowedTools entries for the plan phase (comma-separated), appended to the file-tool defaults
+        type: string
+        required: false
+        default: ""
+      implement-allowed-tools:
+        description: Extra --allowedTools entries for the implement phase (comma-separated), appended to the file-tool defaults
+        type: string
+        required: false
+        default: ""
+      review-allowed-tools:
+        description: --allowedTools entries for the review phase (comma-separated); review never gets Edit/Write
+        type: string
+        required: false
+        default: ""
+      plan-model:
+        type: string
+        required: false
+        default: "claude-opus-4-8"
+      implement-model:
+        type: string
+        required: false
+        default: "claude-sonnet-4-6"
+      review-model:
+        type: string
+        required: false
+        default: "claude-opus-4-8"
+      respond-model-pr-review:
+        type: string
+        required: false
+        default: "claude-opus-4-8"
+      respond-model-followup:
+        type: string
+        required: false
+        default: "claude-sonnet-4-6"
+      plan-effort:
+        type: string
+        required: false
+        default: "medium"
+      implement-effort:
+        type: string
+        required: false
+        default: "medium"
+      review-effort:
+        type: string
+        required: false
+        default: "medium"
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN:
+        required: true
+
+concurrency:
+  group: claude-${{ github.event.issue.number || github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    if: |
+      contains(github.event.comment.body, '@claude') ||
+      contains(github.event.review.body, '@claude') ||
+      contains(github.event.issue.body, '@claude') ||
+      contains(github.event.issue.title, '@claude')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      route: ${{ steps.route.outputs.route }}
+      plan_only: ${{ steps.route.outputs.plan_only }}
+    steps:
+      - name: Route the @claude command
+        id: route
+        env:
+          EVENT: ${{ github.event_name }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          REVIEW_BODY: ${{ github.event.review.body }}
+          PR_URL: ${{ github.event.issue.pull_request.url }}
+        run: |
+          set -euo pipefail
+          case "$EVENT" in
+            issues)                      text="$ISSUE_TITLE $ISSUE_BODY" ;;
+            issue_comment)               text="$COMMENT_BODY" ;;
+            pull_request_review)         text="$REVIEW_BODY" ;;
+            pull_request_review_comment) text="$COMMENT_BODY" ;;
+            *)                           text="" ;;
+          esac
+
+          is_pr=false
+          case "$EVENT" in
+            pull_request_review|pull_request_review_comment) is_pr=true ;;
+            issue_comment) if [ -n "$PR_URL" ]; then is_pr=true; fi ;;
+          esac
+
+          route=skip
+          plan_only=false
+          if printf '%s' "$text" | grep -qi '@claude'; then
+            if [ "$is_pr" = true ]; then
+              if printf '%s' "$text" | grep -qiE '@claude[[:space:]]+review([[:space:]]|$)'; then
+                route=review
+              else
+                route=respond
+              fi
+            elif printf '%s' "$text" | grep -qiE '@claude[[:space:]]+plan([[:space:]]|$)'; then
+              route=plan
+              plan_only=true
+            elif printf '%s' "$text" | grep -qiE '@claude[[:space:]]+implement([[:space:]]|$)'; then
+              route=implement
+            else
+              route=plan
+            fi
+          fi
+
+          echo "route=$route" >> "$GITHUB_OUTPUT"
+          echo "plan_only=$plan_only" >> "$GITHUB_OUTPUT"
+          echo "Routed event '$EVENT' (is_pr=$is_pr) -> route=$route plan_only=$plan_only"
+
+  respond:
+    needs: dispatch
+    if: needs.dispatch.outputs.route == 'respond'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - name: Run Claude Code
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: |
+            --model ${{ github.event_name == 'pull_request_review' && inputs.respond-model-pr-review || inputs.respond-model-followup }}
+      - name: Log actual model used
+        if: always() && steps.claude.outputs.execution_file != ''
+        uses: <OWNER>/<PIPELINE_REPO>/actions/log-model@v1
+        with:
+          number: ${{ github.event.issue.number || github.event.pull_request.number }}
+          phase: Response
+          execution-file: ${{ steps.claude.outputs.execution_file }}
+          github-token: ${{ github.token }}
+      - name: Report failure
+        if: failure() && steps.claude.outcome == 'failure'
+        uses: <OWNER>/<PIPELINE_REPO>/actions/report-failure@v1
+        with:
+          number: ${{ github.event.issue.number || github.event.pull_request.number }}
+          phase: Response
+          execution-file: ${{ steps.claude.outputs.execution_file }}
+          maintainer: ${{ inputs.maintainer }}
+          github-token: ${{ github.token }}
+
+  review:
+    needs: dispatch
+    if: needs.dispatch.outputs.route == 'review'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - name: Set up Python
+        if: inputs.setup == 'python'
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: ${{ inputs.python-version }}
+          cache: "pip"
+      - name: Set up Node
+        if: inputs.setup == 'node'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: "npm"
+      - name: Install dependencies
+        if: inputs.install-command != ''
+        run: ${{ inputs.install-command }}
+      - name: Review (Opus)
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: |
+            --model ${{ inputs.review-model }}
+            --effort ${{ inputs.review-effort }}
+            --allowedTools "Read,Glob,Grep${{ inputs.review-allowed-tools != '' && format(',{0}', inputs.review-allowed-tools) || '' }}"
+      - name: Log actual model used
+        if: always() && steps.claude.outputs.execution_file != ''
+        uses: <OWNER>/<PIPELINE_REPO>/actions/log-model@v1
+        with:
+          number: ${{ github.event.issue.number || github.event.pull_request.number }}
+          phase: Review
+          execution-file: ${{ steps.claude.outputs.execution_file }}
+          effort: ${{ inputs.review-effort }}
+          github-token: ${{ github.token }}
+      - name: Report failure
+        if: failure() && steps.claude.outcome == 'failure'
+        uses: <OWNER>/<PIPELINE_REPO>/actions/report-failure@v1
+        with:
+          number: ${{ github.event.issue.number || github.event.pull_request.number }}
+          phase: Review
+          execution-file: ${{ steps.claude.outputs.execution_file }}
+          maintainer: ${{ inputs.maintainer }}
+          github-token: ${{ github.token }}
+
+  plan:
+    needs: dispatch
+    if: needs.dispatch.outputs.route == 'plan'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      id-token: write
+    outputs:
+      proceed: ${{ steps.gate.outputs.proceed }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - name: Snapshot comment timeline
+        id: snapshot
+        run: echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+      - name: Plan (Opus)
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: |
+            --model ${{ inputs.plan-model }}
+            --effort ${{ inputs.plan-effort }}
+      - name: Log actual model used
+        if: always() && steps.claude.outputs.execution_file != ''
+        uses: <OWNER>/<PIPELINE_REPO>/actions/log-model@v1
+        with:
+          number: ${{ github.event.issue.number }}
+          phase: Planning
+          execution-file: ${{ steps.claude.outputs.execution_file }}
+          effort: ${{ inputs.plan-effort }}
+          github-token: ${{ github.token }}
+      - name: Stamp markers and decide whether to auto-implement
+        id: gate
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+          STARTED_AT: ${{ steps.snapshot.outputs.started_at }}
+          PLAN_ONLY: ${{ needs.dispatch.outputs.plan_only }}
+          CLAUDE_OUTCOME: ${{ steps.claude.outcome }}
+          MAINTAINER: ${{ inputs.maintainer }}
+        run: |
+          set -euo pipefail
+
+          plan="$(gh issue view "$ISSUE" --repo "$REPO" --json comments \
+            --jq '[.comments[]
+                   | select(.author.login != "github-actions")
+                   | select(.createdAt > "'"$STARTED_AT"'")]
+                  | last | .body // ""')"
+
+          if [ -z "$plan" ]; then
+            if [ "$CLAUDE_OUTCOME" = "failure" ]; then
+              gh issue comment "$ISSUE" --repo "$REPO" --body \
+                "🤖 @${MAINTAINER} the **Planning** phase failed. Check the Actions run, then re-comment \`@claude plan\` to retry."
+            else
+              gh issue comment "$ISSUE" --repo "$REPO" --body \
+                "🤖 @${MAINTAINER} planning ran but produced **no plan comment**, so the pipeline could not hand off to implementation. Please re-run \`@claude plan\`."
+            fi
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+            echo "::error::Planning produced no plan comment; failing so the skip is never silent."
+            exit 1
+          fi
+
+          has_questions=false
+          printf '%s' "$plan" | grep -q '\[QUESTION\]' && has_questions=true
+
+          proceed=false
+          if [ "$has_questions" = false ] && [ "$PLAN_ONLY" != "true" ]; then
+            proceed=true
+          fi
+
+          if [ "$proceed" = true ]; then
+            body="$(printf '%s\n%s\n\n%s\n' \
+              '<!-- claude:plan -->' '<!-- claude:proceed -->' \
+              '🤖 Plan has no open questions — proceeding to implementation.')"
+          elif [ "$has_questions" = true ]; then
+            body="$(printf '%s\n\n%s\n' '<!-- claude:plan -->' \
+              "🤖 @${MAINTAINER} the plan above has open \`[QUESTION]\` items — implementation is parked until they are resolved. Reply with answers, then comment \`@claude\` to re-plan, or \`@claude implement\` to build it as-is.")"
+          else
+            body="$(printf '%s\n\n%s\n' '<!-- claude:plan -->' \
+              '🤖 Plan-only run — implementation was not started. Comment `@claude implement` to build this plan.')"
+          fi
+          gh issue comment "$ISSUE" --repo "$REPO" --body "$body"
+
+          echo "proceed=$proceed" >> "$GITHUB_OUTPUT"
+          echo "Plan located (has_questions=$has_questions, plan_only=$PLAN_ONLY, proceed=$proceed)."
+
+  implement:
+    needs: [dispatch, plan]
+    if: >-
+      ${{ !cancelled() && (
+        needs.dispatch.outputs.route == 'implement' ||
+        (needs.plan.result == 'success' && needs.plan.outputs.proceed == 'true' && needs.dispatch.outputs.plan_only == 'false')
+      ) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    steps:
+      - name: Ensure a plan exists
+        id: check_plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          body="$(gh issue view "${{ github.event.issue.number }}" \
+            --repo "${{ github.repository }}" \
+            --json comments \
+            --jq '[.comments[] | select(.body | contains("claude:plan"))] | last | .body // ""')"
+          if [ -z "$body" ]; then
+            echo "No plan comment found; skipping implementation."
+            gh issue comment "${{ github.event.issue.number }}" \
+              --repo "${{ github.repository }}" \
+              --body "🤖 \`@claude implement\` found no plan to build. Run \`@claude plan\` first, or \`@claude\` for the full pipeline."
+            echo "has_plan=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_plan=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Checkout repository
+        if: steps.check_plan.outputs.has_plan == 'true'
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        if: steps.check_plan.outputs.has_plan == 'true' && inputs.setup == 'python'
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: ${{ inputs.python-version }}
+          cache: "pip"
+      - name: Set up Node
+        if: steps.check_plan.outputs.has_plan == 'true' && inputs.setup == 'node'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: "npm"
+      - name: Install dependencies
+        if: steps.check_plan.outputs.has_plan == 'true' && inputs.install-command != ''
+        run: ${{ inputs.install-command }}
+      - name: Implement (Sonnet)
+        id: claude
+        if: steps.check_plan.outputs.has_plan == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: |
+            --model ${{ inputs.implement-model }}
+            --effort ${{ inputs.implement-effort }}
+            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(gh pr create *)${{ inputs.implement-allowed-tools != '' && format(',{0}', inputs.implement-allowed-tools) || '' }}"
+      - name: Log actual model used
+        if: always() && steps.claude.outputs.execution_file != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          target="${{ github.event.issue.number }}"
+          if [ -n "${{ steps.claude.outputs.branch_name }}" ]; then
+            pr="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "${{ steps.claude.outputs.branch_name }}" \
+              --json number --jq '.[0].number // ""')"
+            [ -n "$pr" ] && target="$pr"
+          fi
+          echo "target=$target" >> "$GITHUB_OUTPUT"
+        id: target
+      - uses: <OWNER>/<PIPELINE_REPO>/actions/log-model@v1
+        if: always() && steps.claude.outputs.execution_file != ''
+        with:
+          number: ${{ steps.target.outputs.target }}
+          phase: Implementation
+          execution-file: ${{ steps.claude.outputs.execution_file }}
+          effort: ${{ inputs.implement-effort }}
+          github-token: ${{ github.token }}
+      - uses: <OWNER>/<PIPELINE_REPO>/actions/report-failure@v1
+        if: failure() && steps.claude.outcome == 'failure'
+        with:
+          number: ${{ steps.target.outputs.target }}
+          phase: Implementation
+          execution-file: ${{ steps.claude.outputs.execution_file }}
+          maintainer: ${{ inputs.maintainer }}
+          github-token: ${{ github.token }}

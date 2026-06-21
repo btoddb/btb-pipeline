@@ -1,0 +1,57 @@
+name: Log actual model used
+description: >
+  Post a comment recording the ACTUAL model id Claude's API reported for a
+  run (not the requested --model), read from the claude-code-action
+  execution file.
+
+inputs:
+  number:
+    description: Issue or PR number to comment on (gh accepts a PR number too, since PRs are issues)
+    required: true
+  phase:
+    description: Phase label to show in the comment (e.g. "Planning", "Implementation")
+    required: true
+  execution-file:
+    description: Path to the claude-code-action execution_file output
+    required: true
+  effort:
+    description: The --effort value the job requested, if any. Recorded in the comment alongside the model id.
+    required: false
+    default: ""
+  github-token:
+    description: Token with issues:write used to post the comment
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Log actual model used
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        EXECUTION_FILE: ${{ inputs.execution-file }}
+        NUMBER: ${{ inputs.number }}
+        PHASE: ${{ inputs.phase }}
+        EFFORT: ${{ inputs.effort }}
+      run: |
+        set -euo pipefail
+
+        model="unknown"
+        if [ -n "${EXECUTION_FILE:-}" ] && [ -f "$EXECUTION_FILE" ]; then
+          # The execution log's schema isn't formally documented, so be defensive:
+          # slurp the whole file (-s handles both a JSON array and newline-delimited
+          # JSON) and recursively take the last real `model` field. The SDK tags
+          # locally-generated messages with the model "<synthetic>"; ignore those
+          # (and anything not a claude-* id) so we report the actual API model.
+          found="$(jq -rs '([.. | objects | select(has("model")) | .model | select(startswith("claude"))] | last) // empty' \
+            "$EXECUTION_FILE" 2>/dev/null || true)"
+          [ -n "$found" ] && model="$found"
+        fi
+
+        effort_suffix=""
+        [ -n "$EFFORT" ] && effort_suffix=" at \`${EFFORT}\` effort"
+
+        gh issue comment "$NUMBER" \
+          --repo "$GITHUB_REPOSITORY" \
+          --body "🤖 ${PHASE} ran on model \`${model}\`${effort_suffix}."
+          
