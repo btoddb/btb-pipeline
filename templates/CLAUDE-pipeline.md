@@ -3,7 +3,7 @@
 
   Paste this block into the consuming repo's own CLAUDE.md (there is no
   GitHub mechanism to "include" a remote markdown file at runtime, so each
-  repo carries its own copy). Replace every <MAINTAINER> with the GitHub
+  repo carries its own copy). Replace every <MAINTAINER> (@btoddb) with the GitHub
   username configured as the `maintainer` input in that repo's caller
   workflow, and adjust the `--allowedTools` examples in the Implementation
   and Review sections to match the repo's actual lint/test commands.
@@ -47,7 +47,7 @@ not the requested `--model`) — on the issue for planning, on the PR for
 implementation. This is automatic; you don't need to report your own model.
 
 If a phase fails outright — usage/token limit reached, an API error, a
-timeout — the pipeline's failure helper posts a `@<MAINTAINER>`-tagged comment
+timeout — the pipeline's failure helper posts a `@btoddb`-tagged comment
 naming the phase and, heuristically, the likely cause (usage/token limit vs.
 a generic failure), instead of the run just going red with no comment. Every
 phase job (`respond`, `review`, `implement`, and the `plan` job's no-plan
@@ -60,7 +60,7 @@ gate) wires this in. This is automatic; you don't need to invoke it yourself.
 - **You do NOT write any `<!-- claude:* -->` markers.** The workflow's gate step stamps `<!-- claude:plan -->` / `<!-- claude:proceed -->` itself, deterministically, after your plan is posted. Hand-writing them does nothing useful and can confuse the gate — just write the plan. (Markers used to be your job and were forgotten, silently skipping implementation; that is why they moved into the pipeline.)
 - **The proceed-vs-park decision is driven entirely by `[QUESTION]` items in your plan body** — this is the one machine signal you control:
   - **No open questions** → write none, and the gate auto-stamps the proceed marker; Sonnet implements and opens the PR with no human step.
-  - **Any open question** → write it as a `[QUESTION]` item (literal `[QUESTION]` tag) and `@<MAINTAINER>` so they are notified. The gate sees the tag and parks implementation until a newer plan resolves it. Use `[QUESTION]` *only* for genuine blockers — a stray `[QUESTION]` anywhere in the body will park the run.
+  - **Any open question** → write it as a `[QUESTION]` item (literal `[QUESTION]` tag) and `@btoddb` so they are notified. The gate sees the tag and parks implementation until a newer plan resolves it. Use `[QUESTION]` *only* for genuine blockers — a stray `[QUESTION]` anywhere in the body will park the run.
   - For an **`@claude plan`** (plan-only) request, just write the plan; the gate stamps the plan marker but never proceeds, regardless of questions.
 - **constraint** A plan **revision** is posted as a **new** comment — never silently rewrite history. The pipeline always uses the **most recent** plan comment from the run.
 - **constraint** When re-planning (any `@claude plan` after an earlier plan comment exists), read the full issue thread first: find the prior plan's `[QUESTION]` items and check later comments for answers to them. Resolve answered questions in the revision instead of re-asking — only re-raise a `[QUESTION]` if it's genuinely still unanswered or unresolved.
