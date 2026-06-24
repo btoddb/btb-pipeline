@@ -1,4 +1,4 @@
-# Claude
+# Claude Pipeline
 
 Holds the common scripts/actions for Claude to work in BToddB repos
 
@@ -34,3 +34,6 @@ gh api -X PUT repos/btoddb/btoddb-ha-reminders/actions/permissions/workflow \
 ## Permissions
 
 DEPENDABOT_REVIEW_PAT = 
+
+## Notes
+- Don't forget to set a description and topics for you HACS custom component in the Repo's "About" section

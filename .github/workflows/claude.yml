@@ -279,7 +279,7 @@ jobs:
           claude_args: |
             --model ${{ inputs.review-model }}
             --effort ${{ inputs.review-effort }}
-            --allowedTools "Read,Glob,Grep${{ inputs.review-allowed-tools != '' && format(',{0}', inputs.review-allowed-tools) || '' }}"
+            --allowedTools "Read,Glob,Grep,Bash(python3 -m pytest*){{ inputs.review-allowed-tools != '' && format(',{0}', inputs.review-allowed-tools) || '' }}"
       - name: Check Claude result
         id: check_result
         if: always() && steps.claude.outputs.execution_file != ''
@@ -471,7 +471,7 @@ jobs:
           claude_args: |
             --model ${{ inputs.implement-model }}
             --effort ${{ inputs.implement-effort }}
-            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(gh pr create *)${{ inputs.implement-allowed-tools != '' && format(',{0}', inputs.implement-allowed-tools) || '' }}"
+            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(python3 -m pytest*),Bash(scripts/lint *),Bash(gh pr create *)${{ inputs.implement-allowed-tools != '' && format(',{0}', inputs.implement-allowed-tools) || '' }}"
       - name: Check Claude result
         id: check_result
         if: always() && steps.claude.outputs.execution_file != ''
