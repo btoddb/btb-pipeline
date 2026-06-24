@@ -88,6 +88,14 @@ on:
       CLAUDE_CODE_OAUTH_TOKEN:
         required: true
 
+# Single source of truth for the tools the code-changing phases get. Both the
+# issue-side `implement` job and the PR-side `revise` job reference this, so a
+# tool added here reaches both — they can never silently drift apart (which is
+# exactly how `revise`/`respond` ended up without deploy/npm in the first place).
+# Each job still appends the per-repo `implement-allowed-tools` input on top.
+env:
+  IMPL_TOOLS: "Read,Edit,Write,Glob,Grep,Bash(python3 -m pytest*),Bash(scripts/lint *),Bash(gh pr create *),Bash(scripts/deploy.sh),Bash(npm *)"
+
 jobs:
   dispatch:
     # Only fire when the text that actually triggered this event mentions
@@ -147,6 +155,7 @@ jobs:
             if [ "$is_pr" = true ]; then
               case "$cmd" in
                 review)         route=review ;;
+                revise)         route=revise ;;
                 "")             route=respond ;;
                 plan|implement) route=notify; notify_reason=pr_pipeline ;;
                 *)              route=notify; notify_reason=unknown ;;
@@ -185,11 +194,11 @@ jobs:
           set -euo pipefail
           case "$REASON" in
             pr_pipeline)
-              body=$'🤖 `@claude plan` and `@claude implement` run on **issues**, not pull requests — there is no plan/implement pipeline for a PR, so nothing ran.\n\nOn a pull request you can:\n- comment `@claude review` for a code review, or\n- comment `@claude <your question or request>` and I will respond here.\n\nTo build something new, open an issue and comment `@claude`.' ;;
+              body=$'🤖 `@claude plan` and `@claude implement` run on **issues**, not pull requests — there is no plan/implement pipeline for a PR, so nothing ran.\n\nOn a pull request you can:\n- comment `@claude review` for a code review,\n- comment `@claude revise <what to change>` to iterate on this PR\'s code, or\n- comment `@claude <your question or request>` and I will respond here.\n\nTo build something new, open an issue and comment `@claude`.' ;;
             issue_review)
               body=$'🤖 `@claude review` runs on **pull requests**, not issues, so nothing ran.\n\nOn an issue, comment `@claude` (full pipeline), `@claude plan`, or `@claude implement`.' ;;
             *)
-              body=$'🤖 I did not recognize that `@claude` command, so nothing ran. Recognized commands:\n- `@claude` — full pipeline (plan → implement) on an issue\n- `@claude plan` — planning only (issue)\n- `@claude implement` — implement the latest plan (issue)\n- `@claude review` — review a pull request\n\nOn a pull request, `@claude <message>` responds to the conversation.' ;;
+              body=$'🤖 I did not recognize that `@claude` command, so nothing ran. Recognized commands:\n- `@claude` — full pipeline (plan → implement) on an issue\n- `@claude plan` — planning only (issue)\n- `@claude implement` — implement the latest plan (issue)\n- `@claude review` — review a pull request\n- `@claude revise` — iterate on a pull request\'s code\n\nOn a pull request, `@claude <message>` responds to the conversation.' ;;
           esac
           gh issue comment "$NUMBER" --repo "$REPO" --body "$body"
 
@@ -237,6 +246,94 @@ jobs:
         with:
           number: ${{ github.event.issue.number || github.event.pull_request.number }}
           phase: Response
+          execution-file: ${{ steps.claude.outputs.execution_file }}
+          maintainer: ${{ inputs.maintainer }}
+          github-token: ${{ github.token }}
+
+  revise:
+    # PR-only iteration: re-implement on the existing PR branch from the
+    # feedback in the @claude revise comment. Unlike `respond`, this gets the
+    # full code-changing toolset (IMPL_TOOLS + implement-allowed-tools) and the
+    # language setup, so it can run lint/tests/deploy/npm while iterating.
+    needs: dispatch
+    if: needs.dispatch.outputs.route == 'revise'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    steps:
+      - name: Resolve PR branch
+        id: prbranch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          head="$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefName --jq .headRefName)"
+          if [ -z "$head" ]; then
+            echo "::error::Could not resolve the PR head branch for #$PR_NUMBER."
+            exit 1
+          fi
+          echo "head=$head" >> "$GITHUB_OUTPUT"
+          echo "Iterating on PR #$PR_NUMBER (branch $head)."
+      - name: Checkout PR branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.prbranch.outputs.head }}
+          fetch-depth: 0
+      - name: Set up Python
+        if: inputs.setup == 'python'
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: ${{ inputs.python-version }}
+          cache: "pip"
+      - name: Set up Node
+        if: inputs.setup == 'node'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: "npm"
+      - name: Install dependencies
+        if: inputs.install-command != ''
+        run: ${{ inputs.install-command }}
+      - name: Revise (Sonnet)
+        id: claude
+        env:
+          GH_TOKEN: ${{ github.token }}
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: |
+            --model ${{ inputs.implement-model }}
+            --effort ${{ inputs.implement-effort }}
+            --allowedTools "${{ env.IMPL_TOOLS }}${{ inputs.implement-allowed-tools != '' && format(',{0}', inputs.implement-allowed-tools) || '' }}"
+      - name: Check Claude result
+        id: check_result
+        if: always() && steps.claude.outputs.execution_file != ''
+        run: |
+          if jq -e 'any(.[]; .type == "result" and .is_error == true)' "${{ steps.claude.outputs.execution_file }}" >/dev/null; then
+            echo "::error::Claude returned an error result (is_error: true) before producing usable output."
+            exit 1
+          fi
+      - name: Log actual model used
+        if: always() && steps.claude.outputs.execution_file != ''
+        uses: btoddb/claude-pipeline/actions/log-model@v1
+        with:
+          number: ${{ github.event.issue.number || github.event.pull_request.number }}
+          phase: Revision
+          execution-file: ${{ steps.claude.outputs.execution_file }}
+          effort: ${{ inputs.implement-effort }}
+          github-token: ${{ github.token }}
+      - name: Report failure
+        if: always() && (steps.claude.outcome == 'failure' || steps.check_result.outcome == 'failure')
+        uses: btoddb/claude-pipeline/actions/report-failure@v1
+        with:
+          number: ${{ github.event.issue.number || github.event.pull_request.number }}
+          phase: Revision
           execution-file: ${{ steps.claude.outputs.execution_file }}
           maintainer: ${{ inputs.maintainer }}
           github-token: ${{ github.token }}
@@ -471,7 +568,7 @@ jobs:
           claude_args: |
             --model ${{ inputs.implement-model }}
             --effort ${{ inputs.implement-effort }}
-            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(python3 -m pytest*),Bash(scripts/lint *),Bash(gh pr create *),Bash(scripts/deploy.sh),Bash(npm *)${{ inputs.implement-allowed-tools != '' && format(',{0}', inputs.implement-allowed-tools) || '' }}"
+            --allowedTools "${{ env.IMPL_TOOLS }}${{ inputs.implement-allowed-tools != '' && format(',{0}', inputs.implement-allowed-tools) || '' }}"
       - name: Check Claude result
         id: check_result
         if: always() && steps.claude.outputs.execution_file != ''
