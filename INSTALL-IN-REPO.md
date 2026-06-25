@@ -14,7 +14,7 @@ gh secret set CLAUDE_CODE_OAUTH_TOKEN --app actions --repo btoddb/btoddb-ha-remi
 
 ### Github token
 
-gh api -X PUT repos/btoddb/btoddb-ha-reminders/actions/permissions/workflow \
+gh api -X PUT repos/btoddb/<ropo>/actions/permissions/workflow \
   -f default_workflow_permissions=write
 
 (UI: Settings → Actions → General → Workflow permissions → "Read and write permissions" → Save)
@@ -35,5 +35,5 @@ gh api -X PUT repos/btoddb/btoddb-ha-reminders/actions/permissions/workflow \
 
 DEPENDABOT_REVIEW_PAT = 
 
-## Notes
+# Notes
 - Don't forget to set a description and topics for you HACS custom component in the Repo's "About" section
