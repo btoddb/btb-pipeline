@@ -376,7 +376,7 @@ jobs:
           claude_args: |
             --model ${{ inputs.review-model }}
             --effort ${{ inputs.review-effort }}
-            --allowedTools "Read,Glob,Grep,Bash(python3 -m pytest*){{ inputs.review-allowed-tools != '' && format(',{0}', inputs.review-allowed-tools) || '' }}"
+            --allowedTools "Read,Glob,Grep,Bash(python3 -m pytest*)${{ inputs.review-allowed-tools != '' && format(',{0}', inputs.review-allowed-tools) || '' }}"
       - name: Check Claude result
         id: check_result
         if: always() && steps.claude.outputs.execution_file != ''
