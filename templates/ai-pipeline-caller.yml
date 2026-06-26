@@ -1,0 +1,39 @@
+# Caller workflow for the ai-pipeline repo itself.
+# The reusable pipeline lives at ai-pipeline.yml (workflow_call only); this file
+# provides the event triggers so @btbai works on issues and PRs here too.
+#
+# TEMPLATE FILE — copy this to `.github/workflows/ai-pipeline-caller.yml` inside
+# the btoddb/ai-pipeline repo as part of the MIGRATION.md bootstrap.
+
+name: AI Pipeline
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  issues:
+    types: [opened, assigned]
+  pull_request_review:
+    types: [submitted]
+
+concurrency:
+  group: btbai-${{ github.event.issue.number && 'iss' || 'pull' }}-${{ github.event.issue.number || github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  btbai:
+    uses: ./.github/workflows/ai-pipeline.yml
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      PIPELINE_WORKFLOWS_PAT: ${{ secrets.PIPELINE_WORKFLOWS_PAT }}
+    with:
+      maintainer: btoddb
+      setup: none

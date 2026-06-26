@@ -1,18 +1,25 @@
 name: Report failure
 description: >
-  Post a comment tagging the maintainer when a Claude phase fails outright
-  (usage/token limit, API error, timeout). Without this, a hard failure
-  mid-run leaves the Actions tab red with no comment at all.
+  Post a comment tagging the maintainer when a pipeline phase fails outright
+  (usage/token limit, API error, timeout). Supports both Claude phases
+  (reads from execution_file) and GPT/Codex phases (accepts failure-text directly).
 
 inputs:
   number:
-    description: Issue or PR number to comment on (gh accepts a PR number too, since PRs are issues)
+    description: Issue or PR number to comment on (gh accepts a PR number too)
     required: true
   phase:
     description: Phase label to show in the comment (e.g. "Planning", "Implementation")
     required: true
   execution-file:
-    description: Path to the claude-code-action execution_file output, used to classify the failure
+    description: Path to the claude-code-action execution_file (Claude phases only)
+    required: false
+    default: ""
+  failure-text:
+    description: >
+      Pre-extracted failure text from a GPT/Codex script phase. When set, used
+      instead of reading from execution-file. Passed via $GITHUB_OUTPUT from
+      scripts/gpt-implement.sh and scripts/gpt-revise.sh.
     required: false
     default: ""
   maintainer:
@@ -30,6 +37,7 @@ runs:
       env:
         GH_TOKEN: ${{ inputs.github-token }}
         EXECUTION_FILE: ${{ inputs.execution-file }}
+        FAILURE_TEXT_INPUT: ${{ inputs.failure-text }}
         NUMBER: ${{ inputs.number }}
         PHASE: ${{ inputs.phase }}
         MAINTAINER: ${{ inputs.maintainer }}
@@ -39,10 +47,11 @@ runs:
         run_url="${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-}/actions/runs/${GITHUB_RUN_ID:-}"
 
         error_text=""
-        if [ -n "${EXECUTION_FILE:-}" ] && [ -f "$EXECUTION_FILE" ]; then
-          # Same defensive slurp style as log-model: the execution log's schema
-          # isn't formally documented, so pull any error-ish text out of the last
-          # result object rather than assuming a fixed shape.
+        if [ -n "${FAILURE_TEXT_INPUT:-}" ]; then
+          # GPT/Codex path: caller passed error text directly via $GITHUB_OUTPUT.
+          error_text="${FAILURE_TEXT_INPUT}"
+        elif [ -n "${EXECUTION_FILE:-}" ] && [ -f "$EXECUTION_FILE" ]; then
+          # Claude path: extract from the claude-code-action execution log.
           error_text="$(jq -rs '
               [.. | objects | select(has("is_error") or has("errors") or has("subtype"))]
               | last
@@ -50,26 +59,22 @@ runs:
               | map(select(. != null and . != ""))
               | join(" ")
             ' "$EXECUTION_FILE" 2>/dev/null || true)"
-          # Collapse to one line and cap the length — the log schema is undocumented,
-          # so a stray backtick or newline in error/subtype shouldn't break the
-          # inline-code formatting of the posted comment.
           error_text="$(printf '%s' "$error_text" | tr '\n' ' ' | tr -d '`' | cut -c1-300)"
         fi
 
-        # Heuristic classification: match known usage/token/rate-limit signatures.
-        # This is best-effort string matching against an undocumented log format,
-        # so a miss here just falls through to the generic message below.
+        # Heuristic classification: matches Claude and OpenAI usage/rate-limit signatures.
         is_usage_limit=false
-        if printf '%s' "$error_text" | grep -qiE 'usage limit|rate.?limit|quota|token.?limit|exceeded.*usage|429'; then
+        if printf '%s' "$error_text" | grep -qiE \
+          'usage limit|rate.?limit|quota|token.?limit|exceeded.*usage|429|insufficient_quota|rate_limit_exceeded'; then
           is_usage_limit=true
         fi
 
         if [ "$is_usage_limit" = true ]; then
           reason="the bot likely hit its usage/token limit"
-          advice="Please wait for the limit window to reset, then re-comment \`@claude ...\` to retry."
+          advice="Please wait for the limit window to reset, then re-comment \`@btbai ...\` to retry."
         else
           reason="this phase failed"
-          advice="Please check the [Actions run](${run_url}) for details, then re-comment \`@claude ...\` to retry."
+          advice="Please check the [Actions run](${run_url}) for details, then re-comment \`@btbai ...\` to retry."
         fi
 
         snippet=""
@@ -78,4 +83,3 @@ runs:
         gh issue comment "$NUMBER" \
           --repo "${GITHUB_REPOSITORY:?}" \
           --body "🤖 @${MAINTAINER} the **${PHASE}** phase failed — ${reason}.${snippet} ${advice}"
-          

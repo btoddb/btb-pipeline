@@ -4,7 +4,7 @@
 # consumer pinned at `@v1` picks the change up on its next run.
 #
 # Consumers reference this pipeline as:
-#   uses: btoddb/claude-pipeline/.github/workflows/claude.yml@v1
+#   uses: btoddb/ai-pipeline/.github/workflows/ai-pipeline.yml@v1
 # `v1` is a MOVING tag (GitHub Actions convention): it always points at the newest
 # released commit on main. Releasing therefore means: fast-forward `main` on the
 # remote, then move `v1` to it. See RELEASING.md for the full process.

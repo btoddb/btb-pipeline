@@ -1,0 +1,589 @@
+# Reusable @btbai pipeline — workflow_call version.
+#
+# TEMPLATE FILE — copy this to `.github/workflows/ai-pipeline.yml` inside the
+# dedicated pipeline repo (btoddb/ai-pipeline) as part of the MIGRATION.md
+# bootstrap. GitHub Apps cannot author files under .github/workflows/, which
+# is exactly why this stays a template here.
+#
+# Replace every `<OWNER>/<PIPELINE_REPO>` reference below with the actual
+# `btoddb/ai-pipeline` path, then tag the repo `v1` via scripts/ship.sh.
+#
+# Model routing:
+#   plan / review / respond  → Claude (anthropics/claude-code-action, Opus by default)
+#   implement / revise       → GPT-5.5 via OpenAI Codex CLI (scripts/gpt-implement.sh
+#                              and scripts/gpt-revise.sh)
+
+name: AI Pipeline (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      maintainer:
+        description: GitHub username to @-mention on hard failures and parked plans
+        type: string
+        required: true
+      setup:
+        description: Language runtime to set up before lint/test phases ("python", "node", or "none")
+        type: string
+        required: false
+        default: "none"
+      python-version:
+        type: string
+        required: false
+        default: "3.14"
+      node-version:
+        type: string
+        required: false
+        default: "22"
+      install-command:
+        description: Shell command to install dependencies (run from the repo root after setup)
+        type: string
+        required: false
+        default: ""
+      plan-allowed-tools:
+        description: Extra --allowedTools entries for the plan phase (comma-separated)
+        type: string
+        required: false
+        default: ""
+      implement-allowed-tools:
+        description: Extra Codex sandbox permissions for implement/revise (comma-separated, for documentation)
+        type: string
+        required: false
+        default: ""
+      review-allowed-tools:
+        description: --allowedTools entries for the review phase (comma-separated); review never gets Edit/Write
+        type: string
+        required: false
+        default: ""
+      plan-model:
+        type: string
+        required: false
+        default: "claude-opus-4-8"
+      implement-model:
+        description: OpenAI model id used for implement and revise phases
+        type: string
+        required: false
+        default: "gpt-5.5"
+      review-model:
+        type: string
+        required: false
+        default: "claude-opus-4-8"
+      respond-model-pr-review:
+        type: string
+        required: false
+        default: "claude-opus-4-8"
+      respond-model-followup:
+        type: string
+        required: false
+        default: "claude-sonnet-4-6"
+      plan-effort:
+        type: string
+        required: false
+        default: "xhigh"
+      implement-effort:
+        type: string
+        required: false
+        default: "high"
+      review-effort:
+        type: string
+        required: false
+        default: "high"
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN:
+        required: true
+      OPENAI_API_KEY:
+        required: true
+      PIPELINE_WORKFLOWS_PAT:
+        required: true
+
+# PLAN_TOOLS is read-only: no Edit/Write/Bash that could push code.
+# IMPL_TOOLS documents what Codex is expected to use (not an allowlist —
+# Codex is sandboxed via --approval-mode full-auto instead).
+env:
+  PLAN_TOOLS: "Read,Glob,Grep"
+  IMPL_TOOLS: "Read,Edit,Write,Glob,Grep,Bash(python3 -m pytest*),Bash(scripts/lint *),Bash(gh pr create *),Bash(scripts/deploy.sh:*),Bash(npm *)"
+
+jobs:
+  dispatch:
+    if: |
+      (github.event_name == 'issues' &&
+        (contains(github.event.issue.title, '@btbai') || contains(github.event.issue.body, '@btbai'))) ||
+      ((github.event_name == 'issue_comment' || github.event_name == 'pull_request_review_comment') &&
+        contains(github.event.comment.body, '@btbai')) ||
+      (github.event_name == 'pull_request_review' &&
+        contains(github.event.review.body, '@btbai'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      route: ${{ steps.route.outputs.route }}
+      plan_only: ${{ steps.route.outputs.plan_only }}
+      notify_reason: ${{ steps.route.outputs.notify_reason }}
+    steps:
+      - name: Route the @btbai command
+        id: route
+        env:
+          EVENT: ${{ github.event_name }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          REVIEW_BODY: ${{ github.event.review.body }}
+          PR_URL: ${{ github.event.issue.pull_request.url }}
+        run: |
+          set -euo pipefail
+          case "$EVENT" in
+            issues)                      text="$ISSUE_TITLE $ISSUE_BODY" ;;
+            issue_comment)               text="$COMMENT_BODY" ;;
+            pull_request_review)         text="$REVIEW_BODY" ;;
+            pull_request_review_comment) text="$COMMENT_BODY" ;;
+            *)                           text="" ;;
+          esac
+
+          is_pr=false
+          case "$EVENT" in
+            pull_request_review|pull_request_review_comment) is_pr=true ;;
+            issue_comment) if [ -n "$PR_URL" ]; then is_pr=true; fi ;;
+          esac
+
+          lc="$(printf '%s' "$text" | tr '[:upper:]' '[:lower:]')"
+          cmd="$(printf '%s' "$lc" | grep -oE '@btbai[[:space:]]+[a-z]+' | head -n1 \
+            | sed -E 's/^@btbai[[:space:]]+//' || true)"
+
+          route=skip
+          plan_only=false
+          notify_reason=""
+          if printf '%s' "$lc" | grep -q '@btbai'; then
+            if [ "$is_pr" = true ]; then
+              case "$cmd" in
+                review)         route=review ;;
+                revise)         route=revise ;;
+                "")             route=respond ;;
+                plan|implement) route=notify; notify_reason=pr_pipeline ;;
+                *)              route=notify; notify_reason=unknown ;;
+              esac
+            else
+              case "$cmd" in
+                plan)           route=plan; plan_only=true ;;
+                implement)      route=implement ;;
+                "")             route=plan ;;
+                review)         route=notify; notify_reason=issue_review ;;
+                *)              route=notify; notify_reason=unknown ;;
+              esac
+            fi
+          fi
+
+          echo "route=$route" >> "$GITHUB_OUTPUT"
+          echo "plan_only=$plan_only" >> "$GITHUB_OUTPUT"
+          echo "notify_reason=$notify_reason" >> "$GITHUB_OUTPUT"
+          echo "Routed event '$EVENT' (is_pr=$is_pr cmd='$cmd') -> route=$route plan_only=$plan_only notify_reason=$notify_reason"
+
+  notify:
+    needs: dispatch
+    if: needs.dispatch.outputs.route == 'notify'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Explain why nothing ran
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+          REASON: ${{ needs.dispatch.outputs.notify_reason }}
+        run: |
+          set -euo pipefail
+          case "$REASON" in
+            pr_pipeline)
+              body=$'🤖 `@btbai plan` and `@btbai implement` run on **issues**, not pull requests — there is no plan/implement pipeline for a PR, so nothing ran.\n\nOn a pull request you can:\n- comment `@btbai review` for a code review,\n- comment `@btbai revise <what to change>` to iterate on this PR\'s code, or\n- comment `@btbai <your question or request>` and I will respond here.\n\nTo build something new, open an issue and comment `@btbai`.' ;;
+            issue_review)
+              body=$'🤖 `@btbai review` runs on **pull requests**, not issues, so nothing ran.\n\nOn an issue, comment `@btbai` (full pipeline), `@btbai plan`, or `@btbai implement`.' ;;
+            *)
+              body=$'🤖 I did not recognize that `@btbai` command, so nothing ran. Recognized commands:\n- `@btbai` — full pipeline (plan → implement) on an issue\n- `@btbai plan` — planning only (issue)\n- `@btbai implement` — implement the latest plan (issue)\n- `@btbai review` — review a pull request\n- `@btbai revise` — iterate on a pull request\'s code\n\nOn a pull request, `@btbai <message>` responds to the conversation.' ;;
+          esac
+          gh issue comment "$NUMBER" --repo "$REPO" --body "$body"
+
+  respond:
+    needs: dispatch
+    if: needs.dispatch.outputs.route == 'respond'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - name: Run Claude Code (respond stays on Claude)
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: |
+            --model ${{ github.event_name == 'pull_request_review' && inputs.respond-model-pr-review || inputs.respond-model-followup }}
+      - name: Check Claude result
+        id: check_result
+        if: always() && steps.claude.outputs.execution_file != ''
+        run: |
+          if jq -e 'any(.[]; .type == "result" and .is_error == true)' "${{ steps.claude.outputs.execution_file }}" >/dev/null; then
+            echo "::error::Claude returned an error result (is_error: true) before producing usable output."
+            exit 1
+          fi
+      - name: Log actual model used
+        if: always() && steps.claude.outputs.execution_file != ''
+        uses: btoddb/ai-pipeline/actions/log-model@v1
+        with:
+          number: ${{ github.event.issue.number || github.event.pull_request.number }}
+          phase: Response
+          execution-file: ${{ steps.claude.outputs.execution_file }}
+          github-token: ${{ github.token }}
+      - name: Report failure
+        if: always() && (steps.claude.outcome == 'failure' || steps.check_result.outcome == 'failure')
+        uses: btoddb/ai-pipeline/actions/report-failure@v1
+        with:
+          number: ${{ github.event.issue.number || github.event.pull_request.number }}
+          phase: Response
+          execution-file: ${{ steps.claude.outputs.execution_file }}
+          maintainer: ${{ inputs.maintainer }}
+          github-token: ${{ github.token }}
+
+  revise:
+    # PR-only iteration: applies feedback to the existing PR branch using
+    # OpenAI Codex (gpt-5.5). Gets the same language setup as implement.
+    needs: dispatch
+    if: needs.dispatch.outputs.route == 'revise'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    steps:
+      - name: Resolve PR branch
+        id: prbranch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          head="$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefName --jq .headRefName)"
+          if [ -z "$head" ]; then
+            echo "::error::Could not resolve the PR head branch for #$PR_NUMBER."
+            exit 1
+          fi
+          echo "head=$head" >> "$GITHUB_OUTPUT"
+          echo "Iterating on PR #$PR_NUMBER (branch $head)."
+      - name: Checkout PR branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.prbranch.outputs.head }}
+          fetch-depth: 0
+          token: ${{ secrets.PIPELINE_WORKFLOWS_PAT }}
+      - name: Set up Node (always needed for Codex CLI)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Set up Python
+        if: inputs.setup == 'python'
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: ${{ inputs.python-version }}
+          cache: "pip"
+      - name: Install dependencies
+        if: inputs.install-command != ''
+        run: ${{ inputs.install-command }}
+      - name: Revise (GPT via Codex)
+        id: gpt
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GH_TOKEN: ${{ secrets.PIPELINE_WORKFLOWS_PAT }}
+          IMPLEMENT_MODEL: ${{ inputs.implement-model }}
+          PR_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+          COMMENT_BODY: ${{ github.event.comment.body || github.event.review.body }}
+        run: bash scripts/gpt-revise.sh
+      - name: Log actual model used
+        if: always() && steps.gpt.outcome != 'skipped'
+        uses: btoddb/ai-pipeline/actions/log-model@v1
+        with:
+          number: ${{ github.event.issue.number || github.event.pull_request.number }}
+          phase: Revision
+          model: ${{ inputs.implement-model }}
+          effort: ${{ inputs.implement-effort }}
+          github-token: ${{ github.token }}
+      - name: Report failure
+        if: always() && steps.gpt.outcome == 'failure'
+        uses: btoddb/ai-pipeline/actions/report-failure@v1
+        with:
+          number: ${{ github.event.issue.number || github.event.pull_request.number }}
+          phase: Revision
+          failure-text: ${{ steps.gpt.outputs.failure_text }}
+          maintainer: ${{ inputs.maintainer }}
+          github-token: ${{ github.token }}
+
+  review:
+    needs: dispatch
+    if: needs.dispatch.outputs.route == 'review'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - name: Set up Python
+        if: inputs.setup == 'python'
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: ${{ inputs.python-version }}
+          cache: "pip"
+      - name: Set up Node
+        if: inputs.setup == 'node'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: "npm"
+      - name: Install dependencies
+        if: inputs.install-command != ''
+        run: ${{ inputs.install-command }}
+      - name: Review (Opus)
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: |
+            --model ${{ inputs.review-model }}
+            --effort ${{ inputs.review-effort }}
+            --allowedTools "Read,Glob,Grep,Bash(python3 -m pytest*)${{ inputs.review-allowed-tools != '' && format(',{0}', inputs.review-allowed-tools) || '' }}"
+      - name: Check Claude result
+        id: check_result
+        if: always() && steps.claude.outputs.execution_file != ''
+        run: |
+          if jq -e 'any(.[]; .type == "result" and .is_error == true)' "${{ steps.claude.outputs.execution_file }}" >/dev/null; then
+            echo "::error::Claude returned an error result (is_error: true) before producing usable output."
+            exit 1
+          fi
+      - name: Log actual model used
+        if: always() && steps.claude.outputs.execution_file != ''
+        uses: btoddb/ai-pipeline/actions/log-model@v1
+        with:
+          number: ${{ github.event.issue.number || github.event.pull_request.number }}
+          phase: Review
+          execution-file: ${{ steps.claude.outputs.execution_file }}
+          effort: ${{ inputs.review-effort }}
+          github-token: ${{ github.token }}
+      - name: Report failure
+        if: always() && (steps.claude.outcome == 'failure' || steps.check_result.outcome == 'failure')
+        uses: btoddb/ai-pipeline/actions/report-failure@v1
+        with:
+          number: ${{ github.event.issue.number || github.event.pull_request.number }}
+          phase: Review
+          execution-file: ${{ steps.claude.outputs.execution_file }}
+          maintainer: ${{ inputs.maintainer }}
+          github-token: ${{ github.token }}
+
+  plan:
+    needs: dispatch
+    if: needs.dispatch.outputs.route == 'plan'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      id-token: write
+    outputs:
+      proceed: ${{ steps.gate.outputs.proceed }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - name: Snapshot comment timeline
+        id: snapshot
+        run: echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+      - name: Plan (Opus)
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: |
+            --model ${{ inputs.plan-model }}
+            --effort ${{ inputs.plan-effort }}
+            --allowedTools "${{ env.PLAN_TOOLS }}${{ inputs.plan-allowed-tools != '' && format(',{0}', inputs.plan-allowed-tools) || '' }}"
+      - name: Check Claude result
+        id: check_result
+        if: always() && steps.claude.outputs.execution_file != ''
+        run: |
+          if jq -e 'any(.[]; .type == "result" and .is_error == true)' "${{ steps.claude.outputs.execution_file }}" >/dev/null; then
+            echo "::error::Claude returned an error result (is_error: true) before producing usable output."
+            exit 1
+          fi
+      - name: Log actual model used
+        if: always() && steps.claude.outputs.execution_file != ''
+        uses: btoddb/ai-pipeline/actions/log-model@v1
+        with:
+          number: ${{ github.event.issue.number }}
+          phase: Planning
+          execution-file: ${{ steps.claude.outputs.execution_file }}
+          effort: ${{ inputs.plan-effort }}
+          github-token: ${{ github.token }}
+      - name: Stamp markers and decide whether to auto-implement
+        id: gate
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+          STARTED_AT: ${{ steps.snapshot.outputs.started_at }}
+          PLAN_ONLY: ${{ needs.dispatch.outputs.plan_only }}
+          CLAUDE_OUTCOME: ${{ (steps.check_result.outcome == 'failure' && 'failure') || steps.claude.outcome }}
+          MAINTAINER: ${{ inputs.maintainer }}
+        run: |
+          set -euo pipefail
+
+          plan="$(gh issue view "$ISSUE" --repo "$REPO" --json comments \
+            --jq '[.comments[]
+                   | select(.author.login != "github-actions")
+                   | select(.createdAt > "'"$STARTED_AT"'")]
+                  | last | .body // ""')"
+
+          if [ -z "$plan" ]; then
+            if [ "$CLAUDE_OUTCOME" = "failure" ]; then
+              gh issue comment "$ISSUE" --repo "$REPO" --body \
+                "🤖 @${MAINTAINER} the **Planning** phase failed. Check the Actions run, then re-comment \`@btbai plan\` to retry."
+            else
+              gh issue comment "$ISSUE" --repo "$REPO" --body \
+                "🤖 @${MAINTAINER} planning ran but produced **no plan comment**, so the pipeline could not hand off to implementation. Please re-run \`@btbai plan\`."
+            fi
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+            echo "::error::Planning produced no plan comment; failing so the skip is never silent."
+            exit 1
+          fi
+
+          has_questions=false
+          printf '%s' "$plan" | grep -q '\[QUESTION\]' && has_questions=true
+
+          proceed=false
+          if [ "$has_questions" = false ] && [ "$PLAN_ONLY" != "true" ]; then
+            proceed=true
+          fi
+
+          if [ "$proceed" = true ]; then
+            body="$(printf '%s\n%s\n\n%s\n' \
+              '<!-- btbai:plan -->' '<!-- btbai:proceed -->' \
+              '🤖 Plan has no open questions — proceeding to implementation.')"
+          elif [ "$has_questions" = true ]; then
+            body="$(printf '%s\n\n%s\n' '<!-- btbai:plan -->' \
+              "🤖 @${MAINTAINER} the plan above has open \`[QUESTION]\` items — implementation is parked until they are resolved. Reply with answers, then comment \`@btbai\` to re-plan, or \`@btbai implement\` to build it as-is.")"
+          else
+            body="$(printf '%s\n\n%s\n' '<!-- btbai:plan -->' \
+              '🤖 Plan-only run — implementation was not started. Comment `@btbai implement` to build this plan.')"
+          fi
+          gh issue comment "$ISSUE" --repo "$REPO" --body "$body"
+
+          echo "proceed=$proceed" >> "$GITHUB_OUTPUT"
+          echo "Plan located (has_questions=$has_questions, plan_only=$PLAN_ONLY, proceed=$proceed)."
+
+  implement:
+    needs: [dispatch, plan]
+    if: >-
+      ${{ !cancelled() && (
+        needs.dispatch.outputs.route == 'implement' ||
+        (needs.plan.result == 'success' && needs.plan.outputs.proceed == 'true' && needs.dispatch.outputs.plan_only == 'false')
+      ) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    steps:
+      - name: Ensure a plan exists
+        id: check_plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          body="$(gh issue view "${{ github.event.issue.number }}" \
+            --repo "${{ github.repository }}" \
+            --json comments \
+            --jq '[.comments[] | select(.body | contains("btbai:plan"))] | last | .body // ""')"
+          if [ -z "$body" ]; then
+            echo "No plan comment found; skipping implementation."
+            gh issue comment "${{ github.event.issue.number }}" \
+              --repo "${{ github.repository }}" \
+              --body "🤖 \`@btbai implement\` found no plan to build. Run \`@btbai plan\` first, or \`@btbai\` for the full pipeline."
+            echo "has_plan=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_plan=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Checkout repository
+        if: steps.check_plan.outputs.has_plan == 'true'
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.PIPELINE_WORKFLOWS_PAT }}
+      - name: Set up Node (always needed for Codex CLI)
+        if: steps.check_plan.outputs.has_plan == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Set up Python
+        if: steps.check_plan.outputs.has_plan == 'true' && inputs.setup == 'python'
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: ${{ inputs.python-version }}
+          cache: "pip"
+      - name: Install dependencies
+        if: steps.check_plan.outputs.has_plan == 'true' && inputs.install-command != ''
+        run: ${{ inputs.install-command }}
+      - name: Implement (GPT via Codex)
+        id: gpt
+        if: steps.check_plan.outputs.has_plan == 'true'
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GH_TOKEN: ${{ secrets.PIPELINE_WORKFLOWS_PAT }}
+          IMPLEMENT_MODEL: ${{ inputs.implement-model }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: bash scripts/gpt-implement.sh
+      - name: Resolve log target (PR number if created, else issue number)
+        id: target
+        if: always() && steps.check_plan.outputs.has_plan == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          target="${{ github.event.issue.number }}"
+          branch="${{ steps.gpt.outputs.branch }}"
+          if [ -n "$branch" ]; then
+            pr="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$branch" \
+              --json number --jq '.[0].number // ""' 2>/dev/null || true)"
+            [ -n "$pr" ] && target="$pr"
+          fi
+          echo "target=$target" >> "$GITHUB_OUTPUT"
+      - name: Log actual model used
+        if: always() && steps.check_plan.outputs.has_plan == 'true' && steps.gpt.outcome != 'skipped'
+        uses: btoddb/ai-pipeline/actions/log-model@v1
+        with:
+          number: ${{ steps.target.outputs.target || github.event.issue.number }}
+          phase: Implementation
+          model: ${{ inputs.implement-model }}
+          effort: ${{ inputs.implement-effort }}
+          github-token: ${{ github.token }}
+      - name: Report failure
+        if: always() && steps.gpt.outcome == 'failure'
+        uses: btoddb/ai-pipeline/actions/report-failure@v1
+        with:
+          number: ${{ steps.target.outputs.target || github.event.issue.number }}
+          phase: Implementation
+          failure-text: ${{ steps.gpt.outputs.failure_text }}
+          maintainer: ${{ inputs.maintainer }}
+          github-token: ${{ github.token }}

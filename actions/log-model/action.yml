@@ -1,21 +1,34 @@
 name: Log actual model used
 description: >
-  Post a comment recording the ACTUAL model id Claude's API reported for a
-  run (not the requested --model), read from the claude-code-action
-  execution file.
+  Post a comment recording the model id used for a pipeline phase. Supports
+  both Claude phases (reads from the claude-code-action execution_file) and
+  GPT/Codex phases (accepts the model id directly via the `model` input).
 
 inputs:
   number:
-    description: Issue or PR number to comment on (gh accepts a PR number too, since PRs are issues)
+    description: Issue or PR number to comment on (gh accepts a PR number too)
     required: true
   phase:
     description: Phase label to show in the comment (e.g. "Planning", "Implementation")
     required: true
   execution-file:
-    description: Path to the claude-code-action execution_file output
-    required: true
+    description: Path to the claude-code-action execution_file output (Claude phases only)
+    required: false
+    default: ""
+  model:
+    description: >
+      Model id to report directly. When set, overrides the execution-file lookup.
+      Use this for GPT/Codex phases where there is no execution file.
+    required: false
+    default: ""
+  model-prefix:
+    description: >
+      Prefix used to filter model ids from the execution file (default: "claude").
+      Only used when `model` is not set and `execution-file` is provided.
+    required: false
+    default: "claude"
   effort:
-    description: The --effort value the job requested, if any. Recorded in the comment alongside the model id.
+    description: The --effort value the job requested, if any. Recorded alongside the model id.
     required: false
     default: ""
   github-token:
@@ -33,17 +46,22 @@ runs:
         NUMBER: ${{ inputs.number }}
         PHASE: ${{ inputs.phase }}
         EFFORT: ${{ inputs.effort }}
+        MODEL_OVERRIDE: ${{ inputs.model }}
+        MODEL_PREFIX: ${{ inputs.model-prefix }}
       run: |
         set -euo pipefail
 
         model="unknown"
-        if [ -n "${EXECUTION_FILE:-}" ] && [ -f "$EXECUTION_FILE" ]; then
-          # The execution log's schema isn't formally documented, so be defensive:
-          # slurp the whole file (-s handles both a JSON array and newline-delimited
-          # JSON) and recursively take the last real `model` field. The SDK tags
-          # locally-generated messages with the model "<synthetic>"; ignore those
-          # (and anything not a claude-* id) so we report the actual API model.
-          found="$(jq -rs '([.. | objects | select(has("model")) | .model | select(startswith("claude"))] | last) // empty' \
+
+        if [ -n "${MODEL_OVERRIDE:-}" ]; then
+          # Caller supplied the model id directly (GPT/Codex path).
+          model="$MODEL_OVERRIDE"
+        elif [ -n "${EXECUTION_FILE:-}" ] && [ -f "$EXECUTION_FILE" ]; then
+          # Extract from the claude-code-action execution log (Claude path).
+          prefix="${MODEL_PREFIX:-claude}"
+          found="$(jq -rs \
+            --arg prefix "$prefix" \
+            '([.. | objects | select(has("model")) | .model | select(startswith($prefix))] | last) // empty' \
             "$EXECUTION_FILE" 2>/dev/null || true)"
           [ -n "$found" ] && model="$found"
         fi
@@ -54,4 +72,3 @@ runs:
         gh issue comment "$NUMBER" \
           --repo "$GITHUB_REPOSITORY" \
           --body "🤖 ${PHASE} ran on model \`${model}\`${effort_suffix}."
-          
