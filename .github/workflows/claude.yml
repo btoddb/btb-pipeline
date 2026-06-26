@@ -75,15 +75,15 @@ on:
       plan-effort:
         type: string
         required: false
-        default: "medium"
+        default: "xhigh"
       implement-effort:
         type: string
         required: false
-        default: "medium"
+        default: "high"
       review-effort:
         type: string
         required: false
-        default: "medium"
+        default: "high"
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN:
         required: true
