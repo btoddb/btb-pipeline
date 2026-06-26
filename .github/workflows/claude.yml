@@ -93,7 +93,11 @@ on:
 # tool added here reaches both — they can never silently drift apart (which is
 # exactly how `revise`/`respond` ended up without deploy/npm in the first place).
 # Each job still appends the per-repo `implement-allowed-tools` input on top.
+#
+# PLAN_TOOLS is read-only: no Edit/Write/Bash that could push code. This prevents
+# Claude from attempting git push in the plan job, which only has contents: read.
 env:
+  PLAN_TOOLS: "Read,Glob,Grep"
   IMPL_TOOLS: "Read,Edit,Write,Glob,Grep,Bash(python3 -m pytest*),Bash(scripts/lint *),Bash(gh pr create *),Bash(scripts/deploy.sh),Bash(npm *)"
 
 jobs:
@@ -430,6 +434,7 @@ jobs:
           claude_args: |
             --model ${{ inputs.plan-model }}
             --effort ${{ inputs.plan-effort }}
+            --allowedTools "${{ env.PLAN_TOOLS }}${{ inputs.plan-allowed-tools != '' && format(',{0}', inputs.plan-allowed-tools) || '' }}"
       - name: Check Claude result
         id: check_result
         if: always() && steps.claude.outputs.execution_file != ''
