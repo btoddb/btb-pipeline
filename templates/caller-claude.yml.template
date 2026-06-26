@@ -42,5 +42,5 @@ jobs:
       python-version: "3.14"
       install-command: pip install -r requirements.txt
       #plan-allowed-tools: ""
-      #implement-allowed-tools: "Bash(scripts/deploy.sh),Bash(npm *)"
+      #implement-allowed-tools: "Bash(scripts/deploy.sh:*),Bash(npm *)"
       #review-allowed-tools: ""

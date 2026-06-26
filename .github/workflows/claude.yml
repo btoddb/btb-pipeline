@@ -98,7 +98,7 @@ on:
 # Claude from attempting git push in the plan job, which only has contents: read.
 env:
   PLAN_TOOLS: "Read,Glob,Grep"
-  IMPL_TOOLS: "Read,Edit,Write,Glob,Grep,Bash(python3 -m pytest*),Bash(scripts/lint *),Bash(gh pr create *),Bash(scripts/deploy.sh),Bash(npm *)"
+  IMPL_TOOLS: "Read,Edit,Write,Glob,Grep,Bash(python3 -m pytest*),Bash(scripts/lint *),Bash(gh pr create *),Bash(scripts/deploy.sh:*),Bash(npm *)"
 
 jobs:
   dispatch:
