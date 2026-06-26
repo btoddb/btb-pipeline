@@ -53,8 +53,17 @@ from terminal -> repo
 # Dependabot
 
 ## Permissions
+the BToddB Projects PAT needs: 
+- btoddb -> settings -> secrets
+  - give repository dependabot secrets R/W
 
-DEPENDABOT_REVIEW_PAT = 
+The DEPENDABOT_TOKEN needs
+- btoddb -> settings -> secrets
+  - give repository dependabot secrets RO
+
+gh secret set DEPENDABOT_REVIEW_PAT --app dependabot --repo btoddb/room-climate-controller
+
+
 
 # Notes
 - Don't forget to set a description and topics for you HACS custom component in the Repo's "About" section
