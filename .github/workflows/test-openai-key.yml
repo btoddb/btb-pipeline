@@ -1,0 +1,43 @@
+name: Test OpenAI API Key
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-key:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call OpenAI API
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          response=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
+            https://api.openai.com/v1/models \
+            -H "Authorization: Bearer $OPENAI_API_KEY")
+
+          http_status=$(echo "$response" | grep "HTTP_STATUS:" | cut -d: -f2)
+          body=$(echo "$response" | grep -v "HTTP_STATUS:")
+
+          echo "HTTP status: $http_status"
+
+          if [ "$http_status" = "200" ]; then
+            echo "SUCCESS: API key is valid."
+            echo "$body" | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          ids = [m['id'] for m in data.get('data', [])]
+          gpt = [i for i in ids if 'gpt' in i]
+          print('GPT models visible:', ', '.join(sorted(gpt)) or 'none')
+          "
+          elif [ "$http_status" = "401" ]; then
+            echo "FAIL: Invalid API key (401 Unauthorized)."
+            exit 1
+          elif [ "$http_status" = "429" ]; then
+            echo "FAIL: Quota/rate-limit error (429). Key is valid but billing may not be set up."
+            echo "$body"
+            exit 1
+          else
+            echo "FAIL: Unexpected HTTP status $http_status"
+            echo "$body"
+            exit 1
+          fi
