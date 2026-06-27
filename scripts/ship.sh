@@ -72,6 +72,9 @@ echo "  • push $REMOTE/$MAIN_BRANCH"
 [ -n "$VERSION_TAG" ] && echo "  • create immutable tag $VERSION_TAG"
 echo "  • float $MAJOR_TAG -> $sha (force-update tag) and push it"
 
+# In GitHub Actions there is no interactive terminal; skip the prompt automatically.
+[ "${GITHUB_ACTIONS:-}" = "true" ] && ASSUME_YES=true
+
 if ! $DRY_RUN && ! $ASSUME_YES; then
   printf 'Proceed? [y/N] '
   read -r reply
