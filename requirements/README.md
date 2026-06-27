@@ -14,7 +14,9 @@ disagree, that's a bug in one of them — say so rather than guessing.
 
 Spec files:
 
-None at the moment
+| File | Area |
+|---|---|
+| [`spec/claude-workflow.md`](spec/claude-workflow.md) | `@claude` workflow behavior |
 
 ## How to write requirements (for humans)
 
@@ -32,4 +34,3 @@ None at the moment
 3. The spec never accumulates "we used to…" prose. If behavior is gone, the rule is gone.
 
 ## Conventions that apply everywhere
-
