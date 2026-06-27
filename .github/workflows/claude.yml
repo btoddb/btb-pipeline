@@ -509,7 +509,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ ! -f scripts/ship ]; then
-            echo "::error::scripts/ship not found — create it from templates/ship.sh.template."
+            echo "::error::scripts/ship not found — create it from templates/ship.template."
             exit 1
           fi
           chmod +x scripts/ship

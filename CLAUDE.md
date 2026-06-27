@@ -90,8 +90,9 @@ gate) wires this in. This is automatic; you don't need to invoke it yourself.
 - It squash-merges the PR, deletes the head branch, checks out `main`, then runs `scripts/ship` in the repo root.
 - **constraint** By default, ship refuses to merge if any check has failed (`FAILURE`, `TIMED_OUT`, or `CANCELLED`). Add `--force` to override: `@claude ship --force`.
 - `--public-release` is forwarded to `scripts/ship`, which should create a public "latest" release instead of a pre-release.
-- **constraint** Each repo must provide `scripts/ship`. Use `templates/ship.sh.template` from the pipeline repo as a starting point. The default template creates a pre-release tagged `<version>` with title `<version>-beta`; `--public-release` creates a `--latest` release.
+- **constraint** Each repo must provide `scripts/ship`. Use `templates/ship.template` from the pipeline repo as a starting point. The default template creates a pre-release tagged `<version>` with title `<version>-beta`; `--public-release` creates a `--latest` release.
 - **constraint** If `scripts/ship` is missing, the job fails with guidance to create it.
+- scripts/ship is any executable with a shebang; the bash template is just a reference
 
 #### What Not to Commit
 - Build artifacts, generated bundles, and compiled outputs (unless the project explicitly tracks them).

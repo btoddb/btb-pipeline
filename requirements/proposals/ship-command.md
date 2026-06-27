@@ -19,9 +19,9 @@ comment, removing the manual merge + release steps from each PR landing.
    approval signal — no separate `gh pr review --approve` step is needed.
 4. **constraint** After merging, the job checks out the updated `main` and runs
    `scripts/ship` if the file exists. If the script is missing the job fails with
-   guidance to create one from `templates/ship.sh.template`.
+   guidance to create one from `templates/ship.template`.
 5. **constraint** `scripts/ship` is the per-repo release hook. The pipeline ships
-   `templates/ship.sh.template` as a reference implementation that defaults to a
+   `templates/ship.template` as a reference implementation that defaults to a
    pre-release: creates an annotated git tag, pushes it, then calls
    `gh release create --prerelease` with auto-generated notes and the title
    `<version>-beta`.

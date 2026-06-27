@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# ship.sh — cut a GitHub release for this repo.
+# ship — cut a GitHub release for this repo.
 #
 # The @claude ship command merges the PR, checks out main, then calls this
 # script. You can also run it directly from a clean main branch.
