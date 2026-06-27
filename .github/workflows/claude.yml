@@ -504,7 +504,7 @@ jobs:
           PR_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
         run: |
           set -euo pipefail
-          gh pr merge "$PR_NUMBER" --repo "$REPO" --squash --delete-branch --yes
+          gh pr merge "$PR_NUMBER" --repo "$REPO" --squash --delete-branch
 
       - name: Checkout main
         if: steps.preflight.outputs.proceed == 'true'
