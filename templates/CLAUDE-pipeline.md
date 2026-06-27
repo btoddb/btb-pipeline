@@ -58,6 +58,14 @@ a generic failure), instead of the run just going red with no comment. Every
 phase job (`respond`, `review`, `revise`, `implement`, and the `plan` job's no-plan
 gate) wires this in. This is automatic; you don't need to invoke it yourself.
 
+Every Claude-running phase can file a follow-up GitHub issue with
+`gh issue create` when it discovers work that belongs outside the current task.
+This uses the workflow's `issues: write` token and does not relax each phase's
+code-write boundary: planning, review, and conversational replies still cannot
+edit files or push branches.
+Call `gh issue create` non-interactively, with `--title` and `--body` spelled
+out, so GitHub CLI never prompts or fails for missing required input in CI.
+
 ### Planning (Opus)
 - For every new issue, Opus must read the codebase and generate a structural implementation plan before making any code changes.
 - Ensure the plan is clear and outlines the required steps.
@@ -69,6 +77,7 @@ gate) wires this in. This is automatic; you don't need to invoke it yourself.
   - For an **`@claude plan`** (plan-only) request, just write the plan; the gate stamps the plan marker but never proceeds, regardless of questions.
 - **constraint** A plan **revision** is posted as a **new** comment — never silently rewrite history. The pipeline always uses the **most recent** plan comment from the run.
 - **constraint** When re-planning (any `@claude plan` after an earlier plan comment exists), read the full issue thread first: find the prior plan's `[QUESTION]` items and check later comments for answers to them. Resolve answered questions in the revision instead of re-asking — only re-raise a `[QUESTION]` if it's genuinely still unanswered or unresolved.
+- Planning may file follow-up issues with `gh issue create`, but it remains code-read-only: it cannot edit files, commit, or push.
 
 ### Implementation (Sonnet)
 - Sonnet should execute the approved plan strictly. The plan is the **most recent substantive plan comment Opus wrote in the thread** — use it as the source of truth. (The `<!-- claude:plan -->` marker now lives in a short control comment the *workflow* posts; that comment is the pipeline's signal, not where the plan content lives, so read the plan itself from Opus's comment above it.)
@@ -83,6 +92,7 @@ gate) wires this in. This is automatic; you don't need to invoke it yourself.
 ### Revision (Sonnet)
 - `@claude revise <feedback>` runs on an **open PR** and is the only PR command that changes code. It checks out the PR's head branch, applies the requested changes, and commits **to that same branch** — it does not open a new PR.
 - It shares `implement`'s toolset (the `IMPL_TOOLS` list in the workflow + the repo's `implement-allowed-tools`) and runs the same language **setup + install** steps, so lint, tests, `scripts/deploy.sh`, and `npm` are all available while iterating.
+- It can file follow-up issues with `gh issue create` for work discovered while revising that does not belong in the current PR.
 - **constraint** Read the PR thread and the triggering comment first; make the change the feedback asks for, then push it to the PR branch. Don't open a second PR for the same work.
 
 ### Ship (no model)
@@ -109,6 +119,7 @@ gate) wires this in. This is automatic; you don't need to invoke it yourself.
 - **constraint** Always **post your review as a PR comment** — never finish silently. Even when you find nothing to flag, post a short, warm summary that names what you reviewed and explains specifically why it's solid (not a bare "LGTM").
 - Stop, wait, and request explicit human approval before attempting any fixes or merges.
 - **constraint** If you are asked to review a PR, **NEVER** make changes to the code base.  You are free to add comments with snippets of suggested code.
+- Review may file follow-up issues with `gh issue create`, but it still cannot change the PR branch.
 
 If you leave a comment on the PR, and it is more than just a comment, tag each comment with one of the following:
 - [REQUIRED]: A critical issue that must be fixed before approval

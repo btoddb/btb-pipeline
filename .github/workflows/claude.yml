@@ -94,11 +94,18 @@ on:
 # exactly how `revise`/`respond` ended up without deploy/npm in the first place).
 # Each job still appends the per-repo `implement-allowed-tools` input on top.
 #
-# PLAN_TOOLS is read-only: no Edit/Write/Bash that could push code. This prevents
-# Claude from attempting git push in the plan job, which only has contents: read.
+# All Claude-running phases may file follow-up GitHub issues, but the phase
+# toolsets below still control the code-write boundary: planning/review/respond
+# remain unable to edit files or push branches.
+#
+# PLAN_TOOLS is code-read-only: no Edit/Write/Bash that could push code. This
+# prevents Claude from attempting git push in the plan job, which only has
+# contents: read.
 env:
-  PLAN_TOOLS: "Read,Glob,Grep"
-  IMPL_TOOLS: "Read,Edit,Write,Glob,Grep,Bash(python3 -m pytest*),Bash(scripts/lint *),Bash(gh pr create *),Bash(scripts/deploy.sh:*),Bash(npm *)"
+  PLAN_TOOLS: "Read,Glob,Grep,Bash(gh issue create *)"
+  RESPOND_TOOLS: "Read,Glob,Grep,Bash(gh issue create *)"
+  REVIEW_TOOLS: "Read,Glob,Grep,Bash(python3 -m pytest*),Bash(gh issue create *)"
+  IMPL_TOOLS: "Read,Edit,Write,Glob,Grep,Bash(python3 -m pytest*),Bash(scripts/lint *),Bash(gh pr create *),Bash(gh issue create *),Bash(scripts/deploy.sh:*),Bash(npm *)"
 
 jobs:
   dispatch:
@@ -227,11 +234,14 @@ jobs:
           fetch-depth: 1
       - name: Run Claude Code
         id: claude
+        env:
+          GH_TOKEN: ${{ github.token }}
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           claude_args: |
             --model ${{ github.event_name == 'pull_request_review' && inputs.respond-model-pr-review || inputs.respond-model-followup }}
+            --allowedTools "${{ env.RESPOND_TOOLS }}"
       - name: Check Claude result
         id: check_result
         if: always() && steps.claude.outputs.execution_file != ''
@@ -378,13 +388,15 @@ jobs:
         run: ${{ inputs.install-command }}
       - name: Review (Opus)
         id: claude
+        env:
+          GH_TOKEN: ${{ github.token }}
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           claude_args: |
             --model ${{ inputs.review-model }}
             --effort ${{ inputs.review-effort }}
-            --allowedTools "Read,Glob,Grep,Bash(python3 -m pytest*)${{ inputs.review-allowed-tools != '' && format(',{0}', inputs.review-allowed-tools) || '' }}"
+            --allowedTools "${{ env.REVIEW_TOOLS }}${{ inputs.review-allowed-tools != '' && format(',{0}', inputs.review-allowed-tools) || '' }}"
       - name: Check Claude result
         id: check_result
         if: always() && steps.claude.outputs.execution_file != ''
@@ -546,6 +558,8 @@ jobs:
         run: echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
       - name: Plan (Opus)
         id: claude
+        env:
+          GH_TOKEN: ${{ github.token }}
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
