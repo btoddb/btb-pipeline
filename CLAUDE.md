@@ -63,6 +63,8 @@ Every Claude-running phase can file a follow-up GitHub issue with
 This uses the workflow's `issues: write` token and does not relax each phase's
 code-write boundary: planning, review, and conversational replies still cannot
 edit files or push branches.
+Call `gh issue create` non-interactively, with `--title` and `--body` spelled
+out, so GitHub CLI never prompts or fails for missing required input in CI.
 
 ### Planning (Opus)
 - For every new issue, Opus must read the codebase and generate a structural implementation plan before making any code changes.

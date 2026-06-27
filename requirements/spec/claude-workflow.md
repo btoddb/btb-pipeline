@@ -11,3 +11,6 @@
 3. **constraint CW-3** Follow-up issue filing must not relax each phase's
    code-write boundary: `plan`, `review`, and `respond` remain unable to edit
    files or push branches through their Claude tool allow-lists.
+4. **constraint CW-4** Phases must call `gh issue create` non-interactively,
+   with `--title` and `--body` provided, so GitHub CLI does not prompt or fail
+   for missing required input in CI.
