@@ -472,11 +472,11 @@ jobs:
 
           if [ "$force" = false ]; then
             # Block unless ALL checks are green — catches failed, pending, and in-progress.
-            not_green="$(gh pr view "$PR_NUMBER" --repo "$REPO" --json statusCheckRollup \
-              --jq '[(.statusCheckRollup // [])[] | select((.conclusion == "SUCCESS" or .conclusion == "SKIPPED" or .conclusion == "NEUTRAL" or .state == "SUCCESS") | not)] | length')"
-            if [ "$not_green" -gt 0 ]; then
+            not_green_list="$(gh pr view "$PR_NUMBER" --repo "$REPO" --json statusCheckRollup \
+              --jq '[(.statusCheckRollup // [])[] | select((.conclusion == "SUCCESS" or .conclusion == "SKIPPED" or .conclusion == "NEUTRAL" or .state == "SUCCESS") | not) | "- **\(.name)**: \(.conclusion // .state // "pending")"] | join("\n")')"
+            if [ -n "$not_green_list" ]; then
               gh issue comment "$PR_NUMBER" --repo "$REPO" \
-                --body "$(printf '🤖 Cannot ship — %s check(s) are not green (failed, pending, or in progress). Fix or wait for them, or use `@claude ship --force` to merge anyway.' "$not_green")"
+                --body "$(printf '🤖 Cannot ship — the following checks are not green:\n\n%s\n\nFix or wait for them, then retry. Use `@claude ship --force` to merge anyway.' "$not_green_list")"
               echo "proceed=false" >> "$GITHUB_OUTPUT"
               exit 0
             fi
