@@ -22,6 +22,7 @@ fixed per phase (you do not, and cannot, switch models yourself mid-run):
 | Any issue comment | `@claude implement` | **Implementation only (Sonnet)** — skips planning, implements the latest `<!-- claude:plan -->` comment and opens a PR |
 | PR comment / PR review | `@claude review` | **Line-by-line review (Opus)** — posts tagged comments; cannot change code (`contents` is read-only) |
 | PR comment / PR review | `@claude revise` | **Iterate on the PR (Sonnet)** — re-implements from the feedback in your comment, committing to the PR branch; gets the same code-changing tools and language setup as `implement` |
+| PR comment / PR review | `@claude ship [--force] [--public-release]` | **Ship (no model)** — squash-merges the PR, deletes the branch, then runs `scripts/ship` to cut a release; add `--force` to skip the all-green guard |
 | PR comment / PR review | `@claude` | Conversational reply — **Opus** for a submitted review, **Sonnet** for follow-up comments |
 
 The subcommand is the word immediately after `@claude`; bare `@claude` defaults to
@@ -31,11 +32,11 @@ the most recent plan as-is. `@claude revise` is the PR counterpart to `implement
 use it (not bare `@claude`) when you want code changes on an open PR, because the
 plain conversational reply does **not** carry the deploy/lint/test/npm tools.
 `@claude plan` / `@claude implement` are issue-only and `@claude review` /
-`@claude revise` are PR-only. A subcommand used in the wrong context (e.g. `@claude
-implement` on a PR, `@claude review` on an issue) or one that isn't recognized does
-**not** silently fall back: the `notify` job posts a comment explaining that nothing
-ran and lists the valid commands. A plain comment with no `@claude` mention never
-starts the pipeline at all.
+`@claude revise` / `@claude ship` are PR-only. A subcommand used in the wrong
+context (e.g. `@claude implement` on a PR, `@claude review` on an issue) or one
+that isn't recognized does **not** silently fall back: the `notify` job posts a
+comment explaining that nothing ran and lists the valid commands. A plain comment
+with no `@claude` mention never starts the pipeline at all.
 
 So planning is no longer tied to issue-open: commenting `@claude` (or `@claude
 plan`) on an already-open issue triggers it too. Adding more parameters later is
@@ -83,6 +84,15 @@ gate) wires this in. This is automatic; you don't need to invoke it yourself.
 - `@claude revise <feedback>` runs on an **open PR** and is the only PR command that changes code. It checks out the PR's head branch, applies the requested changes, and commits **to that same branch** — it does not open a new PR.
 - It shares `implement`'s toolset (the `IMPL_TOOLS` list in the workflow + the repo's `implement-allowed-tools`) and runs the same language **setup + install** steps, so lint, tests, `scripts/deploy.sh`, and `npm` are all available while iterating.
 - **constraint** Read the PR thread and the triggering comment first; make the change the feedback asks for, then push it to the PR branch. Don't open a second PR for the same work.
+
+### Ship (no model)
+- `@claude ship [--force] [--public-release]` runs on an **open PR** and is the only command with no LLM involved — it's fully deterministic.
+- It squash-merges the PR, deletes the head branch, checks out `main`, then runs `scripts/ship` in the repo root.
+- **constraint** By default, ship requires **all checks to be green** before merging — failed, pending, and in-progress checks all block it. The comment it posts names each blocking check and its status. Add `--force` to override: `@claude ship --force`.
+- `--public-release` is forwarded to `scripts/ship`, which should create a public "latest" release instead of a pre-release.
+- **constraint** Each repo must provide `scripts/ship`. Use `templates/ship.template` from the pipeline repo as a starting point. The default template creates a pre-release tagged `<version>` with title `<version>-beta`; `--public-release` creates a `--latest` release.
+- **constraint** If `scripts/ship` is missing, the job fails with guidance to create it.
+- `scripts/ship` is any executable with a shebang — the bash template is just a reference; consumers can use Python, Deno, or any other runtime.
 
 #### What Not to Commit
 - Build artifacts, generated bundles, and compiled outputs (unless the project explicitly tracks them).
