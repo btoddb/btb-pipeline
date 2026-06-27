@@ -429,41 +429,63 @@ jobs:
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
           COMMENT_BODY: ${{ github.event.comment.body || github.event.review.body }}
+          AUTHOR_ASSOCIATION: ${{ github.event.comment.author_association || github.event.review.author_association }}
         run: |
           set -euo pipefail
-          lc="$(printf '%s' "$COMMENT_BODY" | tr '[:upper:]' '[:lower:]')"
-          extra="$(printf '%s' "$lc" | grep -oE '@claude[[:space:]]+ship[[:space:]]*.*' | head -n1 \
-            | sed -E 's/^@claude[[:space:]]+ship[[:space:]]*//' || true)"
+
+          # Authorization gate: only repo collaborators/members/owners may ship.
+          case "$AUTHOR_ASSOCIATION" in
+            OWNER|MEMBER|COLLABORATOR) ;;
+            *)
+              gh issue comment "$PR_NUMBER" --repo "$REPO" \
+                --body "🤖 \`@claude ship\` is restricted to repository collaborators. Nothing ran."
+              echo "proceed=false" >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+          esac
+
+          # Extract original-case args after "@claude ship" to preserve case-sensitive values.
+          extra="$(printf '%s' "$COMMENT_BODY" | grep -oiE '@claude[[:space:]]+ship[[:space:]]*.*' | head -n1 \
+            | sed -E 's/^[^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]*//' || true)"
           force=false
-          ship_sh_args=""
+          ship_args=""
           for arg in $extra; do
-            if [ "$arg" = "--force" ]; then
+            arg_lower="$(printf '%s' "$arg" | tr '[:upper:]' '[:lower:]')"
+            if [ "$arg_lower" = "--force" ]; then
               force=true
             else
-              ship_sh_args="$ship_sh_args $arg"
+              ship_args="$ship_args $arg"
             fi
           done
-          ship_sh_args="${ship_sh_args# }"
+          ship_args="${ship_args# }"
           echo "force=$force" >> "$GITHUB_OUTPUT"
-          echo "ship_sh_args=$ship_sh_args" >> "$GITHUB_OUTPUT"
-          echo "Parsed: force=$force forwarded='$ship_sh_args'"
+          echo "ship_args=$ship_args" >> "$GITHUB_OUTPUT"
+          echo "Parsed: force=$force forwarded='$ship_args'"
+
           pr_state="$(gh pr view "$PR_NUMBER" --repo "$REPO" --json state --jq .state)"
           if [ "$pr_state" != "OPEN" ]; then
             gh issue comment "$PR_NUMBER" --repo "$REPO" \
               --body "🤖 Cannot ship — PR #${PR_NUMBER} is not open (state: ${pr_state})."
-            exit 1
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+
           if [ "$force" = false ]; then
-            failed="$(gh pr view "$PR_NUMBER" --repo "$REPO" --json statusCheckRollup \
-              --jq '[(.statusCheckRollup // [])[] | select(.conclusion == "FAILURE" or .conclusion == "TIMED_OUT" or .conclusion == "CANCELLED")] | length')"
-            if [ "$failed" -gt 0 ]; then
+            # Block unless ALL checks are green — catches failed, pending, and in-progress.
+            not_green="$(gh pr view "$PR_NUMBER" --repo "$REPO" --json statusCheckRollup \
+              --jq '[(.statusCheckRollup // [])[] | select((.conclusion == "SUCCESS" or .conclusion == "SKIPPED" or .conclusion == "NEUTRAL" or .state == "SUCCESS") | not)] | length')"
+            if [ "$not_green" -gt 0 ]; then
               gh issue comment "$PR_NUMBER" --repo "$REPO" \
-                --body "$(printf '🤖 Cannot ship — %s check(s) have failed. Fix them or use `@claude ship --force` to merge anyway.' "$failed")"
-              exit 1
+                --body "$(printf '🤖 Cannot ship — %s check(s) are not green (failed, pending, or in progress). Fix or wait for them, or use `@claude ship --force` to merge anyway.' "$not_green")"
+              echo "proceed=false" >> "$GITHUB_OUTPUT"
+              exit 0
             fi
           fi
 
+          echo "proceed=true" >> "$GITHUB_OUTPUT"
+
       - name: Squash-merge and delete branch
+        if: steps.preflight.outputs.proceed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -473,24 +495,27 @@ jobs:
           gh pr merge "$PR_NUMBER" --repo "$REPO" --squash --delete-branch --yes
 
       - name: Checkout main
+        if: steps.preflight.outputs.proceed == 'true'
         uses: actions/checkout@v6
         with:
           ref: main
           fetch-depth: 0
 
-      - name: Run scripts/ship.sh
+      - name: Run scripts/ship
+        if: steps.preflight.outputs.proceed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          SHIP_ARGS: ${{ steps.preflight.outputs.ship_sh_args }}
+          SHIP_ARGS: ${{ steps.preflight.outputs.ship_args }}
         run: |
           set -euo pipefail
-          if [ ! -f scripts/ship.sh ]; then
-            echo "::error::scripts/ship.sh not found — create it from templates/ship.sh.template."
+          if [ ! -f scripts/ship ]; then
+            echo "::error::scripts/ship not found — create it from templates/ship.sh.template."
             exit 1
           fi
-          chmod +x scripts/ship.sh
+          chmod +x scripts/ship
+          set -f
           # shellcheck disable=SC2086
-          scripts/ship.sh $SHIP_ARGS
+          scripts/ship $SHIP_ARGS
 
       - name: Report failure
         if: failure()

@@ -36,9 +36,9 @@ tag per release so anyone who wants to pin an exact version can.
 4. **Ship it:** from a clean `main`, run
 
    ```bash
-   scripts/ship.sh                 # push main + float v1 onto it
-   scripts/ship.sh --tag v1.4.0    # also cut an immutable version tag
-   scripts/ship.sh --dry-run       # print every command, change nothing
+   scripts/ship                 # push main + float v1 onto it
+   scripts/ship --tag v1.4.0    # also cut an immutable version tag
+   scripts/ship --dry-run       # print every command, change nothing
    ```
 
    The script pushes `main`, then force-updates `v1` to that commit and pushes the
@@ -51,7 +51,7 @@ tag per release so anyone who wants to pin an exact version can.
 
 The plan→implement handoff and every consumer run reference `@v1`. Asking each
 downstream repo to bump a pinned SHA on every fix doesn't scale and guarantees
-they drift. A moving `v1` means **one `scripts/ship.sh` here releases to all of
+they drift. A moving `v1` means **one `scripts/ship` here releases to all of
 them at once.** If a release is bad, moving `v1` back to the previous commit is a
-one-line rollback (`scripts/ship.sh` from that commit, or `git tag -f v1 <old> &&
+one-line rollback (`scripts/ship` from that commit, or `git tag -f v1 <old> &&
 git push -f origin v1`).

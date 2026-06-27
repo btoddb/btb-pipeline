@@ -10,10 +10,10 @@
 # remote, then move `v1` to it. See RELEASING.md for the full process.
 #
 # Usage:
-#   scripts/ship.sh                 # push main + float v1 onto current HEAD
-#   scripts/ship.sh --tag v1.4.0    # also cut an immutable version tag
-#   scripts/ship.sh --dry-run       # print every command, change nothing
-#   scripts/ship.sh --yes           # skip the confirmation prompt (automation)
+#   scripts/ship                 # push main + float v1 onto current HEAD
+#   scripts/ship --tag v1.4.0    # also cut an immutable version tag
+#   scripts/ship --dry-run       # print every command, change nothing
+#   scripts/ship --yes           # skip the confirmation prompt (automation)
 #
 set -euo pipefail
 
@@ -30,7 +30,7 @@ while [ $# -gt 0 ]; do
     --dry-run) DRY_RUN=true; shift ;;
     --yes|-y)  ASSUME_YES=true; shift ;;
     -h|--help) sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-    *) echo "ship.sh: unknown argument '$1' (try --help)" >&2; exit 2 ;;
+    *) echo "ship: unknown argument '$1' (try --help)" >&2; exit 2 ;;
   esac
 done
 
@@ -43,7 +43,7 @@ run() {
   fi
 }
 
-die() { echo "ship.sh: $*" >&2; exit 1; }
+die() { echo "ship: $*" >&2; exit 1; }
 
 # --- Preconditions -----------------------------------------------------------
 branch="$(git rev-parse --abbrev-ref HEAD)"

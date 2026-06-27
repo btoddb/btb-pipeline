@@ -22,7 +22,7 @@ fixed per phase (you do not, and cannot, switch models yourself mid-run):
 | Any issue comment | `@claude implement` | **Implementation only (Sonnet)** — skips planning, implements the latest `<!-- claude:plan -->` comment and opens a PR |
 | PR comment / PR review | `@claude review` | **Line-by-line review (Opus)** — posts tagged comments; cannot change code (`contents` is read-only) |
 | PR comment / PR review | `@claude revise` | **Iterate on the PR (Sonnet)** — re-implements from the feedback in your comment, committing to the PR branch; gets the same code-changing tools and language setup as `implement` |
-| PR comment / PR review | `@claude ship [--force] [--public-release]` | **Ship (no model)** — squash-merges the PR, deletes the branch, then runs `scripts/ship.sh` to cut a release; add `--force` to skip failed-check guard |
+| PR comment / PR review | `@claude ship [--force] [--public-release]` | **Ship (no model)** — squash-merges the PR, deletes the branch, then runs `scripts/ship` to cut a release; add `--force` to skip failed-check guard |
 | PR comment / PR review | `@claude` | Conversational reply — **Opus** for a submitted review, **Sonnet** for follow-up comments |
 
 The subcommand is the word immediately after `@claude`; bare `@claude` defaults to
@@ -87,11 +87,11 @@ gate) wires this in. This is automatic; you don't need to invoke it yourself.
 
 ### Ship (no model)
 - `@claude ship [--force] [--public-release]` runs on an **open PR** and is the only command with no LLM involved — it's fully deterministic.
-- It squash-merges the PR, deletes the head branch, checks out `main`, then runs `scripts/ship.sh` in the repo root.
+- It squash-merges the PR, deletes the head branch, checks out `main`, then runs `scripts/ship` in the repo root.
 - **constraint** By default, ship refuses to merge if any check has failed (`FAILURE`, `TIMED_OUT`, or `CANCELLED`). Add `--force` to override: `@claude ship --force`.
-- `--public-release` is forwarded to `scripts/ship.sh`, which should create a public "latest" release instead of a pre-release.
-- **constraint** Each repo must provide `scripts/ship.sh`. Use `templates/ship.sh.template` from the pipeline repo as a starting point. The default template creates a pre-release tagged `<version>` with title `<version>-beta`; `--public-release` creates a `--latest` release.
-- **constraint** If `scripts/ship.sh` is missing, the job fails with guidance to create it. This is intentional — the pipeline does not assume a release strategy.
+- `--public-release` is forwarded to `scripts/ship`, which should create a public "latest" release instead of a pre-release.
+- **constraint** Each repo must provide `scripts/ship`. Use `templates/ship.sh.template` from the pipeline repo as a starting point. The default template creates a pre-release tagged `<version>` with title `<version>-beta`; `--public-release` creates a `--latest` release.
+- **constraint** If `scripts/ship` is missing, the job fails with guidance to create it. This is intentional — the pipeline does not assume a release strategy.
 
 #### What Not to Commit
 - Build artifacts, generated bundles, and compiled outputs (unless the project explicitly tracks them).

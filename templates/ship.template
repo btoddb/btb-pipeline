@@ -6,9 +6,9 @@
 # script. You can also run it directly from a clean main branch.
 #
 # Usage:
-#   scripts/ship.sh                    # pre-release  (label: pre-release, title: <tag>-beta)
-#   scripts/ship.sh --public-release   # full release  (label: latest,       title: <tag>)
-#   scripts/ship.sh --dry-run          # print every command, change nothing
+#   scripts/ship                    # pre-release  (label: pre-release, title: <tag>-beta)
+#   scripts/ship --public-release   # full release  (label: latest,       title: <tag>)
+#   scripts/ship --dry-run          # print every command, change nothing
 #
 # Version is resolved in order:
 #   1. VERSION file in repo root  (single line, e.g. "1.2.3" or "v1.2.3")
@@ -25,7 +25,7 @@ while [ $# -gt 0 ]; do
     --public-release) PUBLIC_RELEASE=true; shift ;;
     --dry-run)        DRY_RUN=true;        shift ;;
     -h|--help)        sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-    *) echo "ship.sh: unknown argument '$1' (try --help)" >&2; exit 2 ;;
+    *) echo "ship: unknown argument '$1' (try --help)" >&2; exit 2 ;;
   esac
 done
 
@@ -33,7 +33,7 @@ run() {
   if $DRY_RUN; then echo "DRY-RUN: $*"; else echo "+ $*"; "$@"; fi
 }
 
-die() { echo "ship.sh: $*" >&2; exit 1; }
+die() { echo "ship: $*" >&2; exit 1; }
 
 # --- Preconditions -----------------------------------------------------------
 branch="$(git rev-parse --abbrev-ref HEAD)"
