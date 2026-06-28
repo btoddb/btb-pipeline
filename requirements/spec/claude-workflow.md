@@ -39,8 +39,9 @@
 8. **recommendation CW-12** Client `scripts/ship` implementations should support
    `--public-release`, `--bump-patch`, `--bump-minor`, and `--bump-major`. The
    workflow forwards these flags to `scripts/ship`; `--public-release` creates a
-   public latest release, and exactly one bump flag is required to increment the
-   release version by patch, minor, or major.
+   public latest release, non-public releases append a `beta` suffix to the
+   version/tag, and exactly one bump flag is required to increment the release
+   version by patch, minor, or major.
 9. **constraint CW-13** `scripts/ship` in `btoddb/claude-pipeline` keeps the
    reusable-workflow release behavior by floating the `v1` major tag while
    accepting the same release flags as `templates/ship.template`. When it runs

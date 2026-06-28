@@ -101,10 +101,10 @@ out, so GitHub CLI never prompts or fails for missing required input in CI.
 - `@claude ship [--force] [--public-release] (--bump-patch|--bump-minor|--bump-major)` runs on an **open PR** and is the only command with no LLM involved — it's fully deterministic.
 - It squash-merges the PR, deletes the head branch, checks out `main`, then runs `scripts/ship` in the repo root.
 - **constraint** By default, ship requires **all checks to be green** before merging — failed, pending, and in-progress checks all block it. The comment it posts names each blocking check and its status. Add `--force` to override: `@claude ship --force`.
-- **constraint** Each repo must provide `scripts/ship`. Use `templates/ship.template` from the pipeline repo as a starting point. The default template creates a pre-release tagged `<version>` with title `<version>-beta`; `--public-release` creates a `--latest` release.
+- **constraint** Each repo must provide `scripts/ship`. Use `templates/ship.template` from the pipeline repo as a starting point. The default template creates a pre-release tagged `<version>-beta`; `--public-release` creates a public `--latest` release tagged `<version>`.
 - **constraint** If `scripts/ship` is missing, the job fails with guidance to create it. This is intentional — the pipeline does not assume a release strategy.
 - `scripts/ship` is any executable with a shebang — the bash template is just a reference; consumers can use Python, Deno, or any other runtime.
-- Client `scripts/ship` implementations are recommended to support `--public-release`, `--bump-patch`, `--bump-minor`, and `--bump-major`. The workflow forwards these flags to `scripts/ship`; `--public-release` should create a public "latest" release instead of a pre-release, and exactly one bump flag should be required to increment the release version by patch, minor, or major.
+- Client `scripts/ship` implementations are recommended to support `--public-release`, `--bump-patch`, `--bump-minor`, and `--bump-major`. The workflow forwards these flags to `scripts/ship`; `--public-release` should create a public "latest" release instead of a pre-release, non-public releases should append a `beta` suffix to the version/tag, and exactly one bump flag should be required to increment the release version by patch, minor, or major.
 
 #### What Not to Commit
 - Build artifacts, generated bundles, and compiled outputs (unless the project explicitly tracks them).

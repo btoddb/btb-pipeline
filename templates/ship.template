@@ -6,9 +6,9 @@
 # script. You can also run it directly from a clean main branch.
 #
 # Usage:
-#   scripts/ship --bump-patch            # pre-release; increment X.Y.Z to X.Y.(Z+1)
-#   scripts/ship --bump-minor            # pre-release; increment X.Y.Z to X.(Y+1).0
-#   scripts/ship --bump-major            # pre-release; increment X.Y.Z to (X+1).0.0
+#   scripts/ship --bump-patch            # pre-release; increment X.Y.Z to X.Y.(Z+1)-beta
+#   scripts/ship --bump-minor            # pre-release; increment X.Y.Z to X.(Y+1).0-beta
+#   scripts/ship --bump-major            # pre-release; increment X.Y.Z to (X+1).0.0-beta
 #   scripts/ship --public-release --bump-minor
 #                                         # full release; label: latest, title: <tag>
 #   scripts/ship --dry-run --bump-patch  # print every command, change nothing
@@ -80,26 +80,32 @@ else
   fi
 fi
 
-if git rev-parse -q --verify "refs/tags/$version" >/dev/null 2>&1; then
-  die "tag '$version' already exists — bump the VERSION file or the latest tag before shipping."
+if $PUBLIC_RELEASE; then
+  release_tag="$version"
+else
+  release_tag="${version}-beta"
+fi
+
+if git rev-parse -q --verify "refs/tags/$release_tag" >/dev/null 2>&1; then
+  die "tag '$release_tag' already exists — bump the VERSION file or the latest tag before shipping."
 fi
 
 # --- Release ------------------------------------------------------------------
 if $PUBLIC_RELEASE; then
-  title="$version"
-  echo "Cutting public release $version:"
-  run git tag -a "$version" -m "Release $version"
-  run git push origin "$version"
-  run gh release create "$version" \
+  title="$release_tag"
+  echo "Cutting public release $release_tag:"
+  run git tag -a "$release_tag" -m "Release $release_tag"
+  run git push origin "$release_tag"
+  run gh release create "$release_tag" \
     --title "$title" \
     --latest \
     --generate-notes
 else
-  title="${version}-beta"
-  echo "Cutting pre-release $version (title: '$title'):"
-  run git tag -a "$version" -m "Pre-release $version"
-  run git push origin "$version"
-  run gh release create "$version" \
+  title="$release_tag"
+  echo "Cutting pre-release $release_tag:"
+  run git tag -a "$release_tag" -m "Pre-release $release_tag"
+  run git push origin "$release_tag"
+  run gh release create "$release_tag" \
     --title "$title" \
     --prerelease \
     --generate-notes
