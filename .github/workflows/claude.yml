@@ -513,6 +513,12 @@ jobs:
           ref: main
           fetch-depth: 0
 
+      - name: Configure git author
+        if: steps.preflight.outputs.proceed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
       - name: Run scripts/ship
         if: steps.preflight.outputs.proceed == 'true'
         env:

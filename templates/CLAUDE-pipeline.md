@@ -100,6 +100,7 @@ out, so GitHub CLI never prompts or fails for missing required input in CI.
 ### Ship (no model)
 - `@claude ship [--force] [--public-release] (--bump-patch|--bump-minor|--bump-major)` runs on an **open PR** and is the only command with no LLM involved — it's fully deterministic.
 - It squash-merges the PR, deletes the head branch, checks out `main`, then runs `scripts/ship` in the repo root.
+- Before calling `scripts/ship`, the workflow configures the local Git author as `github-actions[bot]` so release hooks can create commits and annotated tags in CI.
 - **constraint** By default, ship requires **all checks to be green** before merging — failed, pending, and in-progress checks all block it. The comment it posts names each blocking check and its status. Add `--force` to override: `@claude ship --force`.
 - **constraint** Each repo must provide `scripts/ship`. Use `templates/ship.template` from the pipeline repo as a starting point. The default template creates a pre-release tagged `<version>-beta`; `--public-release` creates a public `--latest` release tagged `<version>`.
 - **constraint** If `scripts/ship` is missing, the job fails with guidance to create it. This is intentional — the pipeline does not assume a release strategy.
