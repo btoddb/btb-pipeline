@@ -7,6 +7,7 @@
   username configured as the `maintainer` input in that repo's caller
   workflow, and adjust the `--allowedTools` examples in the Implementation
   and Review sections to match the repo's actual lint/test commands.
+  
 -->
 
 ## GitHub Workflow
