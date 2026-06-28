@@ -12,10 +12,11 @@ consumer until the `v1` tag is moved onto it. This is the #1 way "it works on
 
 ## The `v1` tag is a *moving* major tag
 
-We follow the GitHub Actions convention: **`v1` always points at the newest
-released commit on `main`.** Consumers pin `@v1` and pick up every patch on their
-next workflow run — no edit on their side. We also cut an immutable `vMAJOR.MINOR.PATCH`
-tag per release so anyone who wants to pin an exact version can.
+We follow the GitHub Actions convention: **`v1` is a lightweight tag that always
+points directly at the newest released commit on `main`.** Consumers pin `@v1`
+and pick up every patch on their next workflow run — no edit on their side. We
+also cut an immutable `vMAJOR.MINOR.PATCH` tag per release so anyone who wants
+to pin an exact version can.
 
 ```
 … ─ A ─ B ─ C   (main)
@@ -45,9 +46,9 @@ tag per release so anyone who wants to pin an exact version can.
    ```
 
    The script pushes `main`, creates an immutable `vMAJOR.MINOR.PATCH` tag and
-   GitHub release, then force-updates `v1` to the same commit and pushes the tag.
-   (Force-moving a *tag* is expected here; we never force-push the `main`
-   *branch*.)
+   GitHub release, then force-updates the lightweight `v1` tag to the same commit
+   and pushes the tag. (Force-moving a *tag* is expected here; we never
+   force-push the `main` *branch*.)
 5. **Verify** the tag moved: `git ls-remote --tags origin v1` should show the new
    SHA, and the consumer's next `@claude` run uses the updated pipeline.
 
