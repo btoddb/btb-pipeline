@@ -60,6 +60,8 @@
 3. **constraint CW-17** The implement job must pass the approved plan body to
    Claude as explicit implementation-phase prompt context. Sonnet must execute
    that plan, not rediscover it from issue comments created after the trigger.
+   The action must still run in tag/track-progress mode so it creates the normal
+   Claude branch and tracking comment.
 4. **constraint CW-18** A successful implement job must leave an implementation
    pull request open. If Claude does not open one, the workflow must create it
    from the pushed Claude branch or fail with an explanatory issue comment when
