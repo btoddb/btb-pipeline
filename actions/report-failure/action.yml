@@ -60,7 +60,7 @@ runs:
         # This is best-effort string matching against an undocumented log format,
         # so a miss here just falls through to the generic message below.
         is_usage_limit=false
-        if printf '%s' "$error_text" | grep -qiE 'usage limit|rate.?limit|quota|token.?limit|exceeded.*usage|429'; then
+        if printf '%s' "$error_text" | grep -qiE '(usage|rate|token|weekly|daily|monthly)[[:space:]._-]*limit|quota|exceeded.*usage|429'; then
           is_usage_limit=true
         fi
 
@@ -78,4 +78,3 @@ runs:
         gh issue comment "$NUMBER" \
           --repo "${GITHUB_REPOSITORY:?}" \
           --body "🤖 @${MAINTAINER} the **${PHASE}** phase failed — ${reason}.${snippet} ${advice}"
-          
