@@ -36,13 +36,17 @@ tag per release so anyone who wants to pin an exact version can.
 4. **Ship it:** from a clean `main`, run
 
    ```bash
-   scripts/ship                 # push main + float v1 onto it
-   scripts/ship --tag v1.4.0    # also cut an immutable version tag
-   scripts/ship --dry-run       # print every command, change nothing
+   scripts/ship --bump-patch            # pre-release; push main, tag, float v1
+   scripts/ship --bump-minor            # pre-release; increment X.Y.Z to X.(Y+1).0
+   scripts/ship --bump-major            # pre-release; increment X.Y.Z to (X+1).0.0
+   scripts/ship --public-release --bump-patch
+                                         # full release; label: latest, title: <tag>
+   scripts/ship --dry-run --bump-patch  # print every command, change nothing
    ```
 
-   The script pushes `main`, then force-updates `v1` to that commit and pushes the
-   tag. (Force-moving a *tag* is expected here; we never force-push the `main`
+   The script pushes `main`, creates an immutable `vMAJOR.MINOR.PATCH` tag and
+   GitHub release, then force-updates `v1` to the same commit and pushes the tag.
+   (Force-moving a *tag* is expected here; we never force-push the `main`
    *branch*.)
 5. **Verify** the tag moved: `git ls-remote --tags origin v1` should show the new
    SHA, and the consumer's next `@claude` run uses the updated pipeline.

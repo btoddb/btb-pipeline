@@ -10,10 +10,18 @@
 # remote, then move `v1` to it. See RELEASING.md for the full process.
 #
 # Usage:
-#   scripts/ship                 # push main + float v1 onto current HEAD
-#   scripts/ship --tag v1.4.0    # also cut an immutable version tag
-#   scripts/ship --dry-run       # print every command, change nothing
-#   scripts/ship --yes           # skip the confirmation prompt (automation)
+#   scripts/ship --bump-patch            # pre-release; increment X.Y.Z to X.Y.(Z+1)
+#   scripts/ship --bump-minor            # pre-release; increment X.Y.Z to X.(Y+1).0
+#   scripts/ship --bump-major            # pre-release; increment X.Y.Z to (X+1).0.0
+#   scripts/ship --public-release --bump-minor
+#                                         # full release; label: latest, title: <tag>
+#   scripts/ship --dry-run --bump-patch  # print every command, change nothing
+#   scripts/ship --yes --bump-patch      # skip the confirmation prompt (automation)
+#
+# Version is resolved in order:
+#   1. VERSION file in repo root  (single line, e.g. "1.2.3" or "v1.2.3")
+#   2. Latest git vX.Y.Z tag + selected bump
+#   3. v0.1.0 if no prior semver tags exist  (a bump flag is still required)
 #
 set -euo pipefail
 
@@ -22,17 +30,37 @@ REMOTE="origin"
 MAIN_BRANCH="main"
 DRY_RUN=false
 ASSUME_YES=false
-VERSION_TAG=""
+PUBLIC_RELEASE=false
+BUMP=""
+BUMP_SET=false
+
+die() { echo "ship: $*" >&2; exit 1; }
+
+set_bump() {
+  if $BUMP_SET; then
+    echo "ship: choose only one bump flag" >&2
+    exit 2
+  fi
+  BUMP="$1"
+  BUMP_SET=true
+}
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --tag)     VERSION_TAG="${2:-}"; shift 2 ;;
-    --dry-run) DRY_RUN=true; shift ;;
-    --yes|-y)  ASSUME_YES=true; shift ;;
-    -h|--help) sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --public-release) PUBLIC_RELEASE=true;  shift ;;
+    --bump-patch)     set_bump patch;       shift ;;
+    --bump-minor)     set_bump minor;       shift ;;
+    --bump-major)     set_bump major;       shift ;;
+    --dry-run)        DRY_RUN=true;         shift ;;
+    --yes|-y)         ASSUME_YES=true;      shift ;;
+    -h|--help)        sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "ship: unknown argument '$1' (try --help)" >&2; exit 2 ;;
   esac
 done
+
+if ! $BUMP_SET; then
+  die "choose a version bump: --bump-patch, --bump-minor, or --bump-major"
+fi
 
 run() {
   if $DRY_RUN; then
@@ -43,21 +71,37 @@ run() {
   fi
 }
 
-die() { echo "ship: $*" >&2; exit 1; }
-
 # --- Preconditions -----------------------------------------------------------
 branch="$(git rev-parse --abbrev-ref HEAD)"
 [ "$branch" = "$MAIN_BRANCH" ] || die "must be on '$MAIN_BRANCH' (currently on '$branch')."
 [ -z "$(git status --porcelain)" ] || die "working tree is not clean — commit or stash first."
 
-if [ -n "$VERSION_TAG" ]; then
-  case "$VERSION_TAG" in
-    v1.*) : ;;
-    *) die "--tag '$VERSION_TAG' must be a v1.x.y tag so it stays under the $MAJOR_TAG line." ;;
-  esac
-  if git rev-parse -q --verify "refs/tags/$VERSION_TAG" >/dev/null; then
-    die "tag '$VERSION_TAG' already exists — pick the next version."
+# --- Version resolution -------------------------------------------------------
+if [ -f VERSION ]; then
+  raw="$(tr -d '[:space:]' < VERSION)"
+  VERSION_TAG="v${raw#v}"
+else
+  latest="$(git tag --list 'v*' --sort=-v:refname \
+    | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1 || true)"
+  if [ -z "$latest" ]; then
+    VERSION_TAG="v0.1.0"
+  else
+    IFS='.' read -r vmajor vminor vpatch <<< "${latest#v}"
+    case "$BUMP" in
+      patch) VERSION_TAG="v${vmajor}.${vminor}.$((vpatch + 1))" ;;
+      minor) VERSION_TAG="v${vmajor}.$((vminor + 1)).0" ;;
+      major) VERSION_TAG="v$((vmajor + 1)).0.0" ;;
+    esac
   fi
+fi
+
+case "$VERSION_TAG" in
+  v1.*) : ;;
+  *) die "resolved tag '$VERSION_TAG' must be a v1.x.y tag so it stays under the $MAJOR_TAG line." ;;
+esac
+
+if git rev-parse -q --verify "refs/tags/$VERSION_TAG" >/dev/null; then
+  die "tag '$VERSION_TAG' already exists — bump the VERSION file or the latest tag before shipping."
 fi
 
 # Refuse to release a main that is behind the remote (someone pushed past us).
@@ -69,7 +113,12 @@ fi
 sha="$(git rev-parse --short HEAD)"
 echo "About to release $MAIN_BRANCH@$sha:"
 echo "  • push $REMOTE/$MAIN_BRANCH"
-[ -n "$VERSION_TAG" ] && echo "  • create immutable tag $VERSION_TAG"
+echo "  • create immutable tag $VERSION_TAG"
+if $PUBLIC_RELEASE; then
+  echo "  • create public GitHub release $VERSION_TAG (latest)"
+else
+  echo "  • create GitHub pre-release $VERSION_TAG (title: ${VERSION_TAG}-beta)"
+fi
 echo "  • float $MAJOR_TAG -> $sha (force-update tag) and push it"
 
 # In GitHub Actions there is no interactive terminal; skip the prompt automatically.
@@ -84,9 +133,21 @@ fi
 # --- Release -----------------------------------------------------------------
 run git push "$REMOTE" "$MAIN_BRANCH"
 
-if [ -n "$VERSION_TAG" ]; then
+if $PUBLIC_RELEASE; then
   run git tag -a "$VERSION_TAG" -m "Release $VERSION_TAG"
   run git push "$REMOTE" "$VERSION_TAG"
+  run gh release create "$VERSION_TAG" \
+    --title "$VERSION_TAG" \
+    --latest \
+    --generate-notes
+else
+  title="${VERSION_TAG}-beta"
+  run git tag -a "$VERSION_TAG" -m "Pre-release $VERSION_TAG"
+  run git push "$REMOTE" "$VERSION_TAG"
+  run gh release create "$VERSION_TAG" \
+    --title "$title" \
+    --prerelease \
+    --generate-notes
 fi
 
 run git tag -f -a "$MAJOR_TAG" -m "Float $MAJOR_TAG -> $sha"

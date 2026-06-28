@@ -42,8 +42,9 @@
    public latest release, and exactly one bump flag is required to increment the
    release version by patch, minor, or major.
 9. **constraint CW-13** `scripts/ship` in `btoddb/claude-pipeline` keeps the
-   reusable-workflow release behavior by floating the `v1` major tag. When it
-   runs in GitHub Actions, it skips the interactive confirmation prompt
+   reusable-workflow release behavior by floating the `v1` major tag while
+   accepting the same release flags as `templates/ship.template`. When it runs
+   in GitHub Actions, it skips the interactive confirmation prompt
    automatically.
 10. **constraint CW-14** On any ship failure, including preflight, merge, and
     release-hook failures, the `report-failure` action tags the maintainer with
