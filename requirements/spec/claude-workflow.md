@@ -46,3 +46,21 @@
 10. **constraint CW-14** On any ship failure, including preflight, merge, and
     release-hook failures, the `report-failure` action tags the maintainer with
     the phase name `Ship`.
+
+## Plan-to-implementation handoff
+
+1. **constraint CW-15** When planning posts a control marker, the marker must
+   identify the approved plan comment with `<!-- claude:plan-comment-id:... -->`
+   while preserving the existing `<!-- claude:plan -->` and
+   `<!-- claude:proceed -->` markers.
+2. **constraint CW-16** The implement job must resolve the approved plan comment
+   before running Claude. It should prefer the explicit plan-comment id and fall
+   back to the latest non-marker, non-`github-actions` comment before the marker
+   for older control comments.
+3. **constraint CW-17** The implement job must pass the approved plan body to
+   Claude as explicit implementation-phase prompt context. Sonnet must execute
+   that plan, not rediscover it from issue comments created after the trigger.
+4. **constraint CW-18** A successful implement job must leave an implementation
+   pull request open. If Claude does not open one, the workflow must create it
+   from the pushed Claude branch or fail with an explanatory issue comment when
+   no branch or no diff exists.

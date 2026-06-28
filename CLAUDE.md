@@ -70,7 +70,7 @@ out, so GitHub CLI never prompts or fails for missing required input in CI.
 - For every new issue, Opus must read the codebase and generate a structural implementation plan before making any code changes.
 - Ensure the plan is clear and outlines the required steps.
 - **constraint** Opus must post the completed plan **as a comment on the issue** — this is the only thing that carries the plan to the implementation job.
-- **You do NOT write any `<!-- claude:* -->` markers.** The workflow's gate step stamps `<!-- claude:plan -->` / `<!-- claude:proceed -->` itself, deterministically, after your plan is posted. Hand-writing them does nothing useful and can confuse the gate — just write the plan. (Markers used to be your job and were forgotten, silently skipping implementation; that is why they moved into the pipeline.)
+- **You do NOT write any `<!-- claude:* -->` markers.** The workflow's gate step stamps `<!-- claude:plan -->`, `<!-- claude:plan-comment-id:... -->`, and when appropriate `<!-- claude:proceed -->` itself, deterministically, after your plan is posted. Hand-writing them does nothing useful and can confuse the gate — just write the plan. (Markers used to be your job and were forgotten, silently skipping implementation; that is why they moved into the pipeline.)
 - **The proceed-vs-park decision is driven entirely by `[QUESTION]` items in your plan body** — this is the one machine signal you control:
   - **No open questions** → write none, and the gate auto-stamps the proceed marker; Sonnet implements and opens the PR with no human step.
   - **Any open question** → write it as a `[QUESTION]` item (literal `[QUESTION]` tag) and `@btoddb` so they are notified. The gate sees the tag and parks implementation until a newer plan resolves it. Use `[QUESTION]` *only* for genuine blockers — a stray `[QUESTION]` anywhere in the body will park the run.
@@ -80,10 +80,10 @@ out, so GitHub CLI never prompts or fails for missing required input in CI.
 - Planning may file follow-up issues with `gh issue create`, but it remains code-read-only: it cannot edit files, commit, or push.
 
 ### Implementation (Sonnet)
-- Sonnet should execute the approved plan strictly. The plan is the **most recent substantive plan comment Opus wrote in the thread** — use it as the source of truth. (The `<!-- claude:plan -->` marker now lives in a short control comment the *workflow* posts; that comment is the pipeline's signal, not where the plan content lives, so read the plan itself from Opus's comment above it.)
+- Sonnet should execute the approved plan strictly. The workflow resolves the approved Opus plan comment from the control marker and passes that plan to Sonnet as explicit implementation-phase prompt context; use that approved plan as the source of truth.
 - **constraint** The gate already validated a plan exists in a real (non-sandboxed) check before you ran — do not re-verify markers yourself or comment on whether any marker is present/missing in your PR summary. If you were invoked, a valid plan was already found; just build it.
 - **constraint** **NEVER** work on main.  Create a new branch for the changes
-- Implement the code and cut a Pull Request (PR) referencing the original issue. Opening the PR is the deliverable — don't finish without it.
+- Implement the code and cut a Pull Request (PR) referencing the original issue. Opening the PR is the deliverable — don't finish without it. If Claude pushes changes but does not open the PR, the workflow creates it; if there is no pushed branch or no diff, the workflow fails instead of silently succeeding.
 - **constraint** Call `gh pr create` non-interactively, with every flag spelled out — never bare `gh pr create` and never `--fill`. Bare invocations prompt interactively and will hang the run. Use:
   `gh pr create --base main --head <branch> --title "<title>" --body "<body>"`
   `Bash(gh pr create *)` is granted for exactly this; use it instead of leaving a compare/quick_pull link (the action's default, which does **not** satisfy the line above).

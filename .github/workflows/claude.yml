@@ -598,13 +598,17 @@ jobs:
         run: |
           set -euo pipefail
 
-          plan="$(gh issue view "$ISSUE" --repo "$REPO" --json comments \
-            --jq '[.comments[]
-                   | select(.author.login != "github-actions")
-                   | select(.createdAt > "'"$STARTED_AT"'")]
-                  | last | .body // ""')"
+          comments="$(gh issue view "$ISSUE" --repo "$REPO" --json comments)"
+          plan_json="$(printf '%s' "$comments" | jq -c \
+            '[.comments[]
+              | select(.author.login != "github-actions")
+              | select(.createdAt > "'"$STARTED_AT"'")]
+             | last // empty')"
+          plan="$(printf '%s' "$plan_json" | jq -r '.body // ""')"
+          plan_id="$(printf '%s' "$plan_json" | jq -r '.id // ""')"
+          plan_url="$(printf '%s' "$plan_json" | jq -r '.url // ""')"
 
-          if [ -z "$plan" ]; then
+          if [ -z "$plan" ] || [ -z "$plan_id" ]; then
             if [ "$CLAUDE_OUTCOME" = "failure" ]; then
               gh issue comment "$ISSUE" --repo "$REPO" --body \
                 "🤖 @${MAINTAINER} the **Planning** phase failed. Check the Actions run, then re-comment \`@claude plan\` to retry."
@@ -625,21 +629,22 @@ jobs:
             proceed=true
           fi
 
+          plan_pointer="$(printf '<!-- claude:plan-comment-id:%s -->' "$plan_id")"
           if [ "$proceed" = true ]; then
-            body="$(printf '%s\n%s\n\n%s\n' \
-              '<!-- claude:plan -->' '<!-- claude:proceed -->' \
+            body="$(printf '%s\n%s\n%s\n\n%s\n' \
+              '<!-- claude:plan -->' "$plan_pointer" '<!-- claude:proceed -->' \
               '🤖 Plan has no open questions — proceeding to implementation.')"
           elif [ "$has_questions" = true ]; then
-            body="$(printf '%s\n\n%s\n' '<!-- claude:plan -->' \
+            body="$(printf '%s\n%s\n\n%s\n' '<!-- claude:plan -->' "$plan_pointer" \
               "🤖 @${MAINTAINER} the plan above has open \`[QUESTION]\` items — implementation is parked until they are resolved. Reply with answers, then comment \`@claude\` to re-plan, or \`@claude implement\` to build it as-is.")"
           else
-            body="$(printf '%s\n\n%s\n' '<!-- claude:plan -->' \
+            body="$(printf '%s\n%s\n\n%s\n' '<!-- claude:plan -->' "$plan_pointer" \
               '🤖 Plan-only run — implementation was not started. Comment `@claude implement` to build this plan.')"
           fi
           gh issue comment "$ISSUE" --repo "$REPO" --body "$body"
 
           echo "proceed=$proceed" >> "$GITHUB_OUTPUT"
-          echo "Plan located (has_questions=$has_questions, plan_only=$PLAN_ONLY, proceed=$proceed)."
+          echo "Plan located at $plan_url (has_questions=$has_questions, plan_only=$PLAN_ONLY, proceed=$proceed)."
 
   implement:
     needs: [dispatch, plan]
@@ -656,52 +661,112 @@ jobs:
       id-token: write
       actions: read
     steps:
-      - name: Ensure a plan exists
-        id: check_plan
+      - name: Resolve approved plan
+        id: approved_plan
         env:
           GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+          MAINTAINER: ${{ inputs.maintainer }}
         run: |
-          body="$(gh issue view "${{ github.event.issue.number }}" \
-            --repo "${{ github.repository }}" \
-            --json comments \
-            --jq '[.comments[] | select(.body | contains("claude:plan"))] | last | .body // ""')"
-          if [ -z "$body" ]; then
-            echo "No plan comment found; skipping implementation."
-            gh issue comment "${{ github.event.issue.number }}" \
-              --repo "${{ github.repository }}" \
-              --body "🤖 \`@claude implement\` found no plan to build. Run \`@claude plan\` first, or \`@claude\` for the full pipeline."
+          set -euo pipefail
+
+          comments="$(gh issue view "$ISSUE" --repo "$REPO" --json comments)"
+          marker="$(printf '%s' "$comments" | jq -c \
+            '[.comments[] | select(.body | contains("<!-- claude:plan -->"))] | last // empty')"
+
+          if [ -z "$marker" ]; then
+            gh issue comment "$ISSUE" --repo "$REPO" --body \
+              "🤖 @${MAINTAINER} \`@claude implement\` found no approved plan marker to build. Run \`@claude plan\` first, or \`@claude\` for the full pipeline."
             echo "has_plan=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_plan=true" >> "$GITHUB_OUTPUT"
+            echo "::error::No approved plan marker found."
+            exit 1
           fi
+
+          marker_body="$(printf '%s' "$marker" | jq -r '.body // ""')"
+          marker_created="$(printf '%s' "$marker" | jq -r '.createdAt // ""')"
+          plan_id="$(printf '%s' "$marker_body" | sed -n 's/.*<!-- claude:plan-comment-id:\([^ ]*\) -->.*/\1/p' | tail -n 1)"
+
+          if [ -n "$plan_id" ]; then
+            plan_json="$(printf '%s' "$comments" | jq -c --arg id "$plan_id" \
+              '.comments[] | select(.id == $id) | . // empty')"
+          else
+            plan_json=""
+          fi
+
+          if [ -z "$plan_json" ]; then
+            plan_json="$(printf '%s' "$comments" | jq -c --arg marker_created "$marker_created" \
+              '[.comments[]
+                | select(.createdAt < $marker_created)
+                | select(.author.login != "github-actions")
+                | select(.body | contains("<!-- claude:plan -->") | not)]
+               | last // empty')"
+          fi
+
+          plan_body="$(printf '%s' "$plan_json" | jq -r '.body // ""')"
+          plan_url="$(printf '%s' "$plan_json" | jq -r '.url // ""')"
+          resolved_plan_id="$(printf '%s' "$plan_json" | jq -r '.id // ""')"
+
+          if [ -z "$plan_body" ] || [ -z "$resolved_plan_id" ]; then
+            gh issue comment "$ISSUE" --repo "$REPO" --body \
+              "🤖 @${MAINTAINER} \`@claude implement\` found an approved plan marker, but could not resolve the plan comment body. Please re-run \`@claude plan\`."
+            echo "has_plan=false" >> "$GITHUB_OUTPUT"
+            echo "::error::Approved plan marker did not resolve to a plan comment."
+            exit 1
+          fi
+
+          {
+            echo "has_plan=true"
+            echo "plan_id=$resolved_plan_id"
+            echo "plan_url=$plan_url"
+            delimiter="CLAUDE_PLAN_$(date +%s%N)_$RANDOM"
+            echo "body<<$delimiter"
+            printf '%s\n' "$plan_body"
+            echo "$delimiter"
+          } >> "$GITHUB_OUTPUT"
       - name: Checkout repository
-        if: steps.check_plan.outputs.has_plan == 'true'
+        if: steps.approved_plan.outputs.has_plan == 'true'
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: Set up Python
-        if: steps.check_plan.outputs.has_plan == 'true' && inputs.setup == 'python'
+        if: steps.approved_plan.outputs.has_plan == 'true' && inputs.setup == 'python'
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ inputs.python-version }}
           cache: "pip"
       - name: Set up Node
-        if: steps.check_plan.outputs.has_plan == 'true' && inputs.setup == 'node'
+        if: steps.approved_plan.outputs.has_plan == 'true' && inputs.setup == 'node'
         uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.node-version }}
           cache: "npm"
       - name: Install dependencies
-        if: steps.check_plan.outputs.has_plan == 'true' && inputs.install-command != ''
+        if: steps.approved_plan.outputs.has_plan == 'true' && inputs.install-command != ''
         run: ${{ inputs.install-command }}
       - name: Implement (Sonnet)
         id: claude
-        if: steps.check_plan.outputs.has_plan == 'true'
+        if: steps.approved_plan.outputs.has_plan == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            You are running the `@claude` implementation phase for issue #${{ github.event.issue.number }}.
+
+            The trigger comment may only contain `@claude`; do not treat that as the full task.
+            The workflow has already selected the approved Opus plan below. Execute this plan.
+
+            Do not draft or post another implementation plan as the final deliverable. Make the code changes,
+            validate them as far as the repository allows, commit and push the branch, then open a pull request
+            referencing issue #${{ github.event.issue.number }}.
+
+            Approved plan comment: ${{ steps.approved_plan.outputs.plan_url }}
+
+            <approved_plan>
+            ${{ steps.approved_plan.outputs.body }}
+            </approved_plan>
           claude_args: |
             --model ${{ inputs.implement-model }}
             --effort ${{ inputs.implement-effort }}
@@ -714,13 +779,72 @@ jobs:
             echo "::error::Claude returned an error result (is_error: true) before producing usable output."
             exit 1
           fi
+      - name: Ensure PR exists
+        id: ensure_pr
+        if: always() && steps.approved_plan.outputs.has_plan == 'true' && steps.claude.outcome == 'success' && steps.check_result.outcome != 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ steps.claude.outputs.branch_name }}
+          PLAN_URL: ${{ steps.approved_plan.outputs.plan_url }}
+          MAINTAINER: ${{ inputs.maintainer }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$BRANCH" ]; then
+            gh issue comment "$ISSUE" --repo "$REPO" --body \
+              "🤖 @${MAINTAINER} the **Implementation** phase finished without reporting a branch, so no pull request could be created. Check the Actions run, then re-comment \`@claude implement\` to retry."
+            echo "::error::Implementation finished without a branch."
+            exit 1
+          fi
+
+          pr_number="$(gh pr list --repo "$REPO" --head "$BRANCH" --json number --jq '.[0].number // ""')"
+          if [ -n "$pr_number" ]; then
+            echo "pr_number=$pr_number" >> "$GITHUB_OUTPUT"
+            echo "Implementation PR already exists: #$pr_number"
+            exit 0
+          fi
+
+          branch_path="$(jq -nr --arg branch "$BRANCH" '$branch | @uri')"
+          if ! gh api "repos/$REPO/branches/$branch_path" >/dev/null 2>&1; then
+            gh issue comment "$ISSUE" --repo "$REPO" --body \
+              "🤖 @${MAINTAINER} the **Implementation** phase finished, but branch \`$BRANCH\` was not pushed, so no pull request could be created. Check the Actions run, then re-comment \`@claude implement\` to retry."
+            echo "::error::Implementation branch was not pushed: $BRANCH"
+            exit 1
+          fi
+
+          commits="$(gh api "repos/$REPO/compare/main...$branch_path" --jq '.total_commits // 0')"
+          if [ "$commits" = "0" ]; then
+            gh issue comment "$ISSUE" --repo "$REPO" --body \
+              "🤖 @${MAINTAINER} the **Implementation** phase pushed branch \`$BRANCH\`, but it has no changes compared with \`main\`, so no pull request was created. Check the Actions run, then re-comment \`@claude implement\` to retry."
+            echo "::error::Implementation branch has no changes compared with main."
+            exit 1
+          fi
+
+          issue_title="$(gh issue view "$ISSUE" --repo "$REPO" --json title --jq .title)"
+          pr_title="Implement #${ISSUE}: ${issue_title}"
+          pr_body="$(cat <<EOF
+          Implements #${ISSUE} from the approved Claude plan.
+
+          Approved plan: ${PLAN_URL}
+
+          Generated with [Claude Code](https://claude.ai/code)
+          EOF
+          )"
+          pr_url="$(gh pr create --repo "$REPO" --base main --head "$BRANCH" --title "$pr_title" --body "$pr_body")"
+          pr_number="${pr_url##*/}"
+          echo "pr_number=$pr_number" >> "$GITHUB_OUTPUT"
+          echo "Created implementation PR: $pr_url"
       - name: Log actual model used
-        if: always() && steps.claude.outputs.execution_file != ''
+        if: always()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           target="${{ github.event.issue.number }}"
-          if [ -n "${{ steps.claude.outputs.branch_name }}" ]; then
+          if [ -n "${{ steps.ensure_pr.outputs.pr_number }}" ]; then
+            target="${{ steps.ensure_pr.outputs.pr_number }}"
+          elif [ -n "${{ steps.claude.outputs.branch_name }}" ]; then
             pr="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "${{ steps.claude.outputs.branch_name }}" \
               --json number --jq '.[0].number // ""')"
             [ -n "$pr" ] && target="$pr"
@@ -736,7 +860,7 @@ jobs:
           effort: ${{ inputs.implement-effort }}
           github-token: ${{ github.token }}
       - uses: btoddb/claude-pipeline/actions/report-failure@v1
-        if: always() && (steps.claude.outcome == 'failure' || steps.check_result.outcome == 'failure')
+        if: always() && (steps.claude.outcome == 'failure' || steps.check_result.outcome == 'failure' || steps.ensure_pr.outcome == 'failure')
         with:
           number: ${{ steps.target.outputs.target }}
           phase: Implementation
