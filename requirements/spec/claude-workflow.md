@@ -31,42 +31,45 @@
    is required.
 5. **constraint CW-9** After merging, ship checks out the updated `main` branch
    and runs `scripts/ship` in the repository root.
-6. **constraint CW-10** If `scripts/ship` is missing, ship fails with guidance to
+6. **constraint CW-10** Before running `scripts/ship`, ship configures the local
+   checkout's Git author as `github-actions[bot]` so per-repository release
+   hooks can create release commits and annotated tags in CI.
+7. **constraint CW-11** If `scripts/ship` is missing, ship fails with guidance to
    create one from `templates/ship.template`.
-7. **constraint CW-11** `scripts/ship` is the per-repository release hook. The
+8. **constraint CW-12** `scripts/ship` is the per-repository release hook. The
    pipeline's `templates/ship.template` is a reference implementation that
    creates a pre-release by default.
-8. **recommendation CW-12** Client `scripts/ship` implementations should support
+9. **recommendation CW-13** Client `scripts/ship` implementations should support
    `--public-release`, `--bump-patch`, `--bump-minor`, and `--bump-major`. The
    workflow forwards these flags to `scripts/ship`; `--public-release` creates a
    public latest release, non-public releases append a `beta` suffix to the
    version/tag, and exactly one bump flag is required to increment the release
    version by patch, minor, or major.
-9. **constraint CW-13** `scripts/ship` in `btoddb/claude-pipeline` keeps the
+10. **constraint CW-14** `scripts/ship` in `btoddb/claude-pipeline` keeps the
    reusable-workflow release behavior by floating the lightweight `v1` major tag
    directly to the released commit while accepting the same release flags as
    `templates/ship.template`. When it runs in GitHub Actions, it skips the
    interactive confirmation prompt automatically.
-10. **constraint CW-14** On any ship failure, including preflight, merge, and
+11. **constraint CW-15** On any ship failure, including preflight, merge, and
     release-hook failures, the `report-failure` action tags the maintainer with
     the phase name `Ship`.
 
 ## Plan-to-implementation handoff
 
-1. **constraint CW-15** When planning posts a control marker, the marker must
+1. **constraint CW-16** When planning posts a control marker, the marker must
    identify the approved plan comment with `<!-- claude:plan-comment-id:... -->`
    while preserving the existing `<!-- claude:plan -->` and
    `<!-- claude:proceed -->` markers.
-2. **constraint CW-16** The implement job must resolve the approved plan comment
+2. **constraint CW-17** The implement job must resolve the approved plan comment
    before running Claude. It should prefer the explicit plan-comment id and fall
    back to the latest non-marker, non-`github-actions` comment before the marker
    for older control comments.
-3. **constraint CW-17** The implement job must pass the approved plan body to
+3. **constraint CW-18** The implement job must pass the approved plan body to
    Claude as explicit implementation-phase prompt context. Sonnet must execute
    that plan, not rediscover it from issue comments created after the trigger.
    The action must still run in tag/track-progress mode so it creates the normal
    Claude branch and tracking comment.
-4. **constraint CW-18** A successful implement job must leave an implementation
+4. **constraint CW-19** A successful implement job must leave an implementation
    pull request open. If Claude does not open one, the workflow must create it
    from the pushed Claude branch or fail with an explanatory issue comment when
    no branch or no diff exists.
