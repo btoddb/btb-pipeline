@@ -24,7 +24,7 @@ fixed per phase (you do not, and cannot, switch models yourself mid-run):
 | Any issue comment | `@claude implement` | **Implementation only (Sonnet)** — skips planning, implements the latest `<!-- claude:plan -->` comment and opens a PR |
 | PR comment / PR review | `@claude review` | **Line-by-line review (Opus)** — posts tagged comments; cannot change code (`contents` is read-only) |
 | PR comment / PR review | `@claude revise` | **Iterate on the PR (Sonnet)** — re-implements from the feedback in your comment, committing to the PR branch; gets the same code-changing tools and language setup as `implement` |
-| PR comment / PR review | `@claude ship [--force] [--public-release] (--bump-patch\|--bump-minor\|--bump-major)` | **Ship (no model)** — squash-merges the PR, deletes the branch, then runs `scripts/ship` to cut a release; add `--force` to skip the all-green guard |
+| PR comment / PR review | `@claude ship [--force] [--public-release] [--bump-patch\|--bump-minor\|--bump-major]` | **Ship (no model)** — squash-merges the PR, deletes the branch, then runs `scripts/ship` to cut a release; add `--force` to skip the all-green guard |
 | PR comment / PR review | `@claude` | Conversational reply — **Opus** for a submitted review, **Sonnet** for follow-up comments |
 
 The subcommand is the word immediately after `@claude`; bare `@claude` defaults to
@@ -98,14 +98,13 @@ out, so GitHub CLI never prompts or fails for missing required input in CI.
 - **constraint** Read the PR thread and the triggering comment first; make the change the feedback asks for, then push it to the PR branch. Don't open a second PR for the same work.
 
 ### Ship (no model)
-- `@claude ship [--force] [--public-release] (--bump-patch|--bump-minor|--bump-major)` runs on an **open PR** and is the only command with no LLM involved — it's fully deterministic.
+- `@claude ship [--force] [--public-release] [--bump-patch|--bump-minor|--bump-major]` runs on an **open PR** and is the only command with no LLM involved — it's fully deterministic.
 - It squash-merges the PR, deletes the head branch, checks out `main`, then runs `scripts/ship` in the repo root.
-- Before calling `scripts/ship`, the workflow configures the local Git author as `github-actions[bot]` so release hooks can create commits and annotated tags in CI.
 - **constraint** By default, ship requires **all checks to be green** before merging — failed, pending, and in-progress checks all block it. The comment it posts names each blocking check and its status. Add `--force` to override: `@claude ship --force`.
-- **constraint** Each repo must provide `scripts/ship`. Use `templates/ship.template` from the pipeline repo as a starting point. The default template creates a pre-release tagged `<version>-beta`; `--public-release` creates a public `--latest` release tagged `<version>`.
+- **constraint** Each repo must provide `scripts/ship`. Use `templates/ship.template` from the pipeline repo as a starting point. The default template creates a pre-release tagged `<version>` with title `<version>-beta`; `--public-release` creates a `--latest` release.
 - **constraint** If `scripts/ship` is missing, the job fails with guidance to create it. This is intentional — the pipeline does not assume a release strategy.
 - `scripts/ship` is any executable with a shebang — the bash template is just a reference; consumers can use Python, Deno, or any other runtime.
-- Client `scripts/ship` implementations are recommended to support `--public-release`, `--bump-patch`, `--bump-minor`, and `--bump-major`. The workflow forwards these flags to `scripts/ship`; `--public-release` should create a public "latest" release instead of a pre-release, non-public releases should append a `beta` suffix to the version/tag, and exactly one bump flag should be required to increment the release version by patch, minor, or major.
+- Client `scripts/ship` implementations are recommended to support `--public-release`, `--bump-patch`, `--bump-minor`, and `--bump-major`. The workflow forwards these flags to `scripts/ship`; `--public-release` should create a public "latest" release instead of a pre-release, and the bump flags should increment the release version by patch, minor, and major respectively.
 
 #### What Not to Commit
 - Build artifacts, generated bundles, and compiled outputs (unless the project explicitly tracks them).
