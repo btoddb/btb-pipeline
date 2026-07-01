@@ -1,14 +1,9 @@
-# Reusable `@claude` pipeline — workflow_call version of this repo's
-# .github/workflows/claude.yml, converted to be shared across repos.
+# Reusable `@claude` pipeline shared across BToddB repositories.
 #
-# This file is a TEMPLATE, not an active workflow: rename it to
-# `.github/workflows/claude.yml` inside the new dedicated pipeline repo
-# (e.g. <owner>/claude-pipeline). It cannot be dropped into this repo as-is —
-# GitHub Apps cannot author files under .github/workflows/, which is exactly
-# why this stays a template here. See MIGRATION.md in this folder.
-#
-# Replace every `<OWNER>/<PIPELINE_REPO>` below with the dedicated repo's
-# actual owner/name once it exists, then tag the repo `v1`.
+# Client repositories should call this workflow at
+# btoddb/claude-pipeline/.github/workflows/claude.yml@v1 from a tiny event
+# workflow. Keep shared command semantics here and release the moving v1 tag
+# when client repositories need the updated behavior.
 
 name: Claude Code (reusable)
 
@@ -106,6 +101,32 @@ env:
   RESPOND_TOOLS: "Read,Glob,Grep,Bash(gh issue create *)"
   REVIEW_TOOLS: "Read,Glob,Grep,Bash(python3 -m pytest*),Bash(gh issue create *)"
   IMPL_TOOLS: "Read,Edit,Write,Glob,Grep,Bash(python3 -m pytest*),Bash(scripts/lint *),Bash(gh pr create *),Bash(gh issue create *),Bash(scripts/deploy-card:*),Bash(npm *)"
+  SHARED_AGENT_CONTRACT: >-
+    You are running inside the shared btoddb/claude-pipeline @claude workflow.
+    Treat this workflow as the source of truth for @claude command semantics and
+    phase boundaries. Valid issue commands are bare @claude for plan then
+    implement, @claude plan for planning only, and @claude implement for the
+    latest approved plan. Valid pull request commands are @claude review,
+    @claude revise, @claude ship, and bare @claude for conversation. Planning,
+    review, and response phases may read code and file follow-up issues, but
+    must not edit files or push branches. Implementation must execute the
+    approved plan, create a fresh branch instead of working on main, validate as
+    far as the repo allows, commit and push the branch, and open a pull request.
+    Revision must update the existing PR branch rather than opening another PR.
+    Review must post a PR comment even when there are no findings and must not
+    change code; tag any substantive review comment with one of [REQUIRED],
+    [QUESTION], [NIT], or [PRAISE], and write a short warm summary rather than a
+    bare LGTM. Ship is deterministic, requires a PR, checks green status unless
+    forced, squash-merges, then runs the repo release hook. Use GitHub CLI
+    commands non-interactively with required flags provided. When planning, post
+    the plan as an issue comment and do not write any <!-- claude:* --> markers
+    yourself, the workflow stamps those; if the plan has a genuine blocker, write
+    it as a literal [QUESTION] item and @-mention the maintainer so the gate
+    parks implementation, using [QUESTION] only for real blockers since any
+    stray occurrence parks the run. Follow the checked out repository's local
+    CLAUDE.md, AGENTS.md, and ai-rules files for repo-specific instructions;
+    local files should contain only repo-specific rules because this shared
+    contract is injected at runtime.
 
 jobs:
   dispatch:
@@ -241,6 +262,7 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           claude_args: |
             --model ${{ github.event_name == 'pull_request_review' && inputs.respond-model-pr-review || inputs.respond-model-followup }}
+            --append-system-prompt "${{ env.SHARED_AGENT_CONTRACT }}"
             --allowedTools "${{ env.RESPOND_TOOLS }}"
       - name: Check Claude result
         id: check_result
@@ -328,6 +350,7 @@ jobs:
           claude_args: |
             --model ${{ inputs.implement-model }}
             --effort ${{ inputs.implement-effort }}
+            --append-system-prompt "${{ env.SHARED_AGENT_CONTRACT }}"
             --allowedTools "${{ env.IMPL_TOOLS }}${{ inputs.implement-allowed-tools != '' && format(',{0}', inputs.implement-allowed-tools) || '' }}"
       - name: Check Claude result
         id: check_result
@@ -396,6 +419,7 @@ jobs:
           claude_args: |
             --model ${{ inputs.review-model }}
             --effort ${{ inputs.review-effort }}
+            --append-system-prompt "${{ env.SHARED_AGENT_CONTRACT }}"
             --allowedTools "${{ env.REVIEW_TOOLS }}${{ inputs.review-allowed-tools != '' && format(',{0}', inputs.review-allowed-tools) || '' }}"
       - name: Check Claude result
         id: check_result
@@ -572,6 +596,7 @@ jobs:
           claude_args: |
             --model ${{ inputs.plan-model }}
             --effort ${{ inputs.plan-effort }}
+            --append-system-prompt "${{ env.SHARED_AGENT_CONTRACT }}"
             --allowedTools "${{ env.PLAN_TOOLS }}${{ inputs.plan-allowed-tools != '' && format(',{0}', inputs.plan-allowed-tools) || '' }}"
       - name: Check Claude result
         id: check_result
@@ -777,6 +802,7 @@ jobs:
           claude_args: |
             --model ${{ inputs.implement-model }}
             --effort ${{ inputs.implement-effort }}
+            --append-system-prompt "${{ env.SHARED_AGENT_CONTRACT }}"
             --allowedTools "${{ env.IMPL_TOOLS }}${{ inputs.implement-allowed-tools != '' && format(',{0}', inputs.implement-allowed-tools) || '' }}"
       - name: Check Claude result
         id: check_result
