@@ -260,6 +260,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          trigger_phrase: "@btb"
           claude_args: |
             --model ${{ github.event_name == 'pull_request_review' && inputs.respond-model-pr-review || inputs.respond-model-followup }}
             --append-system-prompt "${{ env.SHARED_AGENT_CONTRACT }}"
@@ -347,6 +348,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          trigger_phrase: "@btb"
           claude_args: |
             --model ${{ inputs.implement-model }}
             --effort ${{ inputs.implement-effort }}
@@ -416,6 +418,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          trigger_phrase: "@btb"
           claude_args: |
             --model ${{ inputs.review-model }}
             --effort ${{ inputs.review-effort }}
@@ -593,6 +596,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          trigger_phrase: "@btb"
           claude_args: |
             --model ${{ inputs.plan-model }}
             --effort ${{ inputs.plan-effort }}
@@ -783,6 +787,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          trigger_phrase: "@btb"
           track_progress: true
           prompt: |
             You are running the `@btb` implementation phase for issue #${{ github.event.issue.number }}.
