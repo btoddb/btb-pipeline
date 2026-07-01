@@ -19,6 +19,15 @@
    `.github/workflows/btb.yml`, this living spec, and any client installation
    guidance together. Do not add another long-form copy of the contract as a
    template.
+4. **constraint BW-23** Every `anthropics/claude-code-action@v1` step in the
+   reusable workflow must set `trigger_phrase: "@btb"`. The action has its own
+   built-in trigger gate that defaults to `@claude` and silently skips running
+   Claude (no error, no output) whenever no explicit `prompt` input is
+   supplied and the triggering text does not contain the configured phrase.
+   Without this override, any phase invoked without an explicit `prompt`
+   (`plan`, `respond`, `revise`, `review`) would never actually run even
+   though `dispatch` already routed the event on `@btb`, producing a
+   downstream "no output" failure instead of a clear error.
 
 ## Follow-up issues
 
