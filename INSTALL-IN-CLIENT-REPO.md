@@ -51,8 +51,12 @@ gh secret set CLAUDE_CODE_OAUTH_TOKEN --app actions --repo btoddb/<repo>
 
 ## Install 
 
-- templates/caller-claude.template.yml to <repo>/.github/workflows/claude-caller.yml
-- PROJECT_CONTEXT-pipeline.md to <repo>/PROJECT_CONTEXT.md (or paste into existing)
+- templates/caller-claude.template.yml to <repo>/.github/workflows/claude.yml,
+  filling in the `with:` block (`maintainer`, `setup`, language version,
+  `install-command`, and any `*-allowed-tools` the repo needs) for that repo
+- templates/PROJECT_CONTEXT-pipeline.md to <repo>/ai-rules/PROJECT_CONTEXT.md
+  only as a local-rules starter. Do not paste the shared `@claude` command
+  contract into client repos; the reusable workflow injects that at runtime.
 - templates/ship.template to <repo>/scripts/ship (required for `@claude ship`; supports `--public-release`, appends a `beta` suffix for non-public release tags, and requires exactly one of `--bump-patch`, `--bump-minor`, or `--bump-major`)
 
 ## Install Claude
@@ -68,8 +72,9 @@ from terminal -> repo
 
 [`dependabot-review.yml`](.github/workflows/dependabot-review.yml) posts `@claude
 review` on every Dependabot PR so it gets the same Opus line-by-line review a human
-typing that comment would trigger (see the `@claude` command table in
-[CLAUDE.md](CLAUDE.md#github-workflow)).
+typing that comment would trigger (see the `@claude` command semantics in
+[ai-rules/GITHUB_WORKFLOW.md](ai-rules/GITHUB_WORKFLOW.md) and
+[requirements/spec/claude-workflow.md](requirements/spec/claude-workflow.md)).
 
 ## Permissions
 
@@ -85,7 +90,7 @@ Add the DEPENDABOT_REVIEW_PAT as a Dependabot secret (not actions secret) on the
 
 ## Install
 
-Copy templates/dependabot.template.yml to your repo's .github/dependabot.yml
-Copy templates/dependabot-review.yml to your repo's .github/workflows/dependabot-review.yml
+Copy templates/dependabot.yml.template to your repo's .github/dependabot.yml
+Copy templates/dependabot-review.yml.template to your repo's .github/workflows/dependabot-review.yml
 
 # Notes

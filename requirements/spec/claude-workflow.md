@@ -1,5 +1,25 @@
 # Claude workflow
 
+## Shared agent contract
+
+1. **constraint CW-20** The reusable workflow must inject the shared `@claude`
+   command contract into every Claude-running phase at runtime. The injected
+   contract must cover command routing, phase boundaries, code-write
+   restrictions, PR/revision/review expectations, ship behavior, non-interactive
+   GitHub CLI usage, the `[QUESTION]` planning gate signal (including the
+   prohibition on hand-writing `<!-- claude:* -->` markers), and the review
+   comment tag convention (`[REQUIRED]`/`[QUESTION]`/`[NIT]`/`[PRAISE]` plus a
+   non-bare summary).
+2. **constraint CW-21** Client repository templates must not require consumers
+   to paste the full shared command contract into `CLAUDE.md`, `AGENTS.md`, or
+   `ai-rules/PROJECT_CONTEXT.md`. Client agent files should contain only local
+   repository guidance and short pointers because shared pipeline behavior is
+   supplied by `btoddb/claude-pipeline@v1`.
+3. **constraint CW-22** If command semantics or phase boundaries change, update
+   `.github/workflows/claude.yml`, this living spec, and any client installation
+   guidance together. Do not add another long-form copy of the contract as a
+   template.
+
 ## Follow-up issues
 
 1. **constraint CW-1** Every Claude-running phase (`respond`, `plan`,
