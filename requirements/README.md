@@ -1,6 +1,6 @@
 # Requirements
 
-This folder is the **functional source of truth** for `claude-pipeline`.
+This folder is the **functional source of truth** for `btb`.
 It is written for both humans and the AI agent. If the code and a `spec/` file
 disagree, that's a bug in one of them — say so rather than guessing.
 
@@ -16,7 +16,7 @@ Spec files:
 
 | File | Area |
 |---|---|
-| [`spec/claude-workflow.md`](spec/claude-workflow.md) | `@claude` workflow behavior |
+| [`spec/btb-workflow.md`](spec/btb-workflow.md) | `@btb` workflow behavior |
 
 ## How to write requirements (for humans)
 

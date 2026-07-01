@@ -3,7 +3,7 @@
 This repo is a **reusable workflow** consumed by other repos, which pin it as:
 
 ```yaml
-uses: btoddb/claude-pipeline/.github/workflows/claude.yml@v1
+uses: btoddb/btb-pipeline/.github/workflows/btb.yml@v1
 ```
 
 That `@v1` is the contract. A fix that lands on `main` does **not** reach a single
@@ -50,7 +50,7 @@ to pin an exact version can.
    and pushes the tag. (Force-moving a *tag* is expected here; we never
    force-push the `main` *branch*.)
 5. **Verify** the tag moved: `git ls-remote --tags origin v1` should show the new
-   SHA, and the consumer's next `@claude` run uses the updated pipeline.
+   SHA, and the consumer's next `@btb` run uses the updated pipeline.
 
 ## Why a moving tag instead of re-pinning consumers
 

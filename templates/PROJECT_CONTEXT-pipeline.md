@@ -1,7 +1,7 @@
 # Project context template for client repositories
 
-The shared `@claude` command contract is injected at runtime by
-`btoddb/claude-pipeline`. Do not paste that shared workflow behavior into client
+The shared `@btb` command contract is injected at runtime by
+`btoddb/btb-pipeline`. Do not paste that shared workflow behavior into client
 repositories; copied contract text drifts as the pipeline evolves.
 
 Use the client repository's `ai-rules/PROJECT_CONTEXT.md` only for local facts
@@ -14,5 +14,5 @@ the shared pipeline cannot know, such as:
 - project-specific security or review constraints
 
 Keep those local rules short and specific. When the shared pipeline behavior
-changes, update `btoddb/claude-pipeline` and release the moving `v1` tag instead
+changes, update `btoddb/btb-pipeline` and release the moving `v1` tag instead
 of editing every client repository.

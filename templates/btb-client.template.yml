@@ -1,16 +1,16 @@
-# Thin per-repo caller for the shared `@claude` pipeline.
+# Thin per-repo caller for the shared `@btb` pipeline.
 #
 # This file is a TEMPLATE, not an active workflow: once <OWNER>/<PIPELINE_REPO>
 # exists and is tagged v1, copy this into a consuming repo's
-# `.github/workflows/claude.yml` (replacing whatever is there), fill in the
+# `.github/workflows/btb-client.yml` (replacing whatever is there), fill in the
 # `with:` block for that repo, and keep repo-specific agent guidance in that
-# repo's own CLAUDE.md / AGENTS.md / ai-rules files. The shared @claude command
+# repo's own CLAUDE.md / AGENTS.md / ai-rules files. The shared @btb command
 # contract is injected by the reusable workflow at runtime.
 #
 # Event triggers and concurrency MUST live in the caller — a reusable workflow
 # can't be the event entry point.
 
-name: Claude Code
+name: BTB Pipeline
 
 on:
   issue_comment:
@@ -23,12 +23,12 @@ on:
     types: [submitted]
 
 concurrency:
-  group: claude-${{ github.event.issue.number && 'iss' || 'pull' }}-${{ github.event.issue.number || github.event.pull_request.number }}
+  group: btb-${{ github.event.issue.number && 'iss' || 'pull' }}-${{ github.event.issue.number || github.event.pull_request.number }}
   cancel-in-progress: false
 
 jobs:
-  claude:
-    uses: btoddb/claude-pipeline/.github/workflows/claude.yml@v1
+  btb:
+    uses: btoddb/btb-pipeline/.github/workflows/btb.yml@v1
     permissions:
       contents: write
       pull-requests: write

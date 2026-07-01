@@ -1,16 +1,16 @@
 # Project context
 
-This repository owns the shared `@claude` pipeline for BToddB repositories.
+This repository owns the shared `@btb` pipeline for BToddB repositories.
 Client repositories should call the reusable workflow at
-`btoddb/claude-pipeline/.github/workflows/claude.yml@v1` instead of copying the
+`btoddb/btb-pipeline/.github/workflows/btb.yml@v1` instead of copying the
 pipeline implementation.
 
 ## Shared agent contract
 
-The shared `@claude` command contract is injected at runtime from the
-`SHARED_AGENT_CONTRACT` environment value in `.github/workflows/claude.yml`.
+The shared `@btb` command contract is injected at runtime from the
+`SHARED_AGENT_CONTRACT` environment value in `.github/workflows/btb.yml`.
 Update that workflow value, the executable workflow behavior, and
-`requirements/spec/claude-workflow.md` together when command semantics or phase
+`requirements/spec/btb-workflow.md` together when command semantics or phase
 boundaries change.
 
 Do not paste the full shared contract into `CLAUDE.md`, `AGENTS.md`, client

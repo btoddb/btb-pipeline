@@ -1,6 +1,6 @@
-# Claude Pipeline
+# BTB Pipeline
 
-Holds the common scripts/actions for Claude to work in BToddB repos
+Holds the common scripts/actions for BTB automation in BToddB repos.
 
 # Repos
 
@@ -51,13 +51,13 @@ gh secret set CLAUDE_CODE_OAUTH_TOKEN --app actions --repo btoddb/<repo>
 
 ## Install 
 
-- templates/caller-claude.template.yml to <repo>/.github/workflows/claude.yml,
+- templates/btb-client.template.yml to <repo>/.github/workflows/btb-client.yml,
   filling in the `with:` block (`maintainer`, `setup`, language version,
   `install-command`, and any `*-allowed-tools` the repo needs) for that repo
 - templates/PROJECT_CONTEXT-pipeline.md to <repo>/ai-rules/PROJECT_CONTEXT.md
-  only as a local-rules starter. Do not paste the shared `@claude` command
+  only as a local-rules starter. Do not paste the shared `@btb` command
   contract into client repos; the reusable workflow injects that at runtime.
-- templates/ship.template to <repo>/scripts/ship (required for `@claude ship`; supports `--public-release`, appends a `beta` suffix for non-public release tags, and requires exactly one of `--bump-patch`, `--bump-minor`, or `--bump-major`)
+- templates/ship.template to <repo>/scripts/ship (required for `@btb ship`; supports `--public-release`, appends a `beta` suffix for non-public release tags, and requires exactly one of `--bump-patch`, `--bump-minor`, or `--bump-major`)
 
 ## Install Claude
 
@@ -70,11 +70,11 @@ from terminal -> repo
 
 # Dependabot
 
-[`dependabot-review.yml`](.github/workflows/dependabot-review.yml) posts `@claude
-review` on every Dependabot PR so it gets the same Opus line-by-line review a human
-typing that comment would trigger (see the `@claude` command semantics in
+[`dependabot-review.yml`](.github/workflows/dependabot-review.yml) posts `@btb
+review` on every Dependabot PR so it gets the same BTB review path a human
+typing that comment would trigger (see the `@btb` command semantics in
 [ai-rules/GITHUB_WORKFLOW.md](ai-rules/GITHUB_WORKFLOW.md) and
-[requirements/spec/claude-workflow.md](requirements/spec/claude-workflow.md)).
+[requirements/spec/btb-workflow.md](requirements/spec/btb-workflow.md)).
 
 ## Permissions
 
