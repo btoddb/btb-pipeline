@@ -66,10 +66,10 @@ runs:
 
         if [ "$is_usage_limit" = true ]; then
           reason="the bot likely hit its usage/token limit"
-          advice="Please wait for the limit window to reset, then re-comment \`@btb ...\` to retry."
+          advice="Please wait for the limit window to reset, then re-comment \`/btbai ...\` to retry."
         else
           reason="this phase failed"
-          advice="Please check the [Actions run](${run_url}) for details, then re-comment \`@btb ...\` to retry."
+          advice="Please check the [Actions run](${run_url}) for details, then re-comment \`/btbai ...\` to retry."
         fi
 
         snippet=""

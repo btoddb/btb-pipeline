@@ -1,6 +1,6 @@
 # Project context template for client repositories
 
-The shared `@btb` command contract is injected at runtime by
+The shared `/btbai` command contract is injected at runtime by
 `btoddb/btb-pipeline`. Do not paste that shared workflow behavior into client
 repositories; copied contract text drifts as the pipeline evolves.
 

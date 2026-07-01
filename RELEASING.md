@@ -50,7 +50,7 @@ to pin an exact version can.
    and pushes the tag. (Force-moving a *tag* is expected here; we never
    force-push the `main` *branch*.)
 5. **Verify** the tag moved: `git ls-remote --tags origin v1` should show the new
-   SHA, and the consumer's next `@btb` run uses the updated pipeline.
+   SHA, and the consumer's next `/btbai` run uses the updated pipeline.
 
 ## Why a moving tag instead of re-pinning consumers
 

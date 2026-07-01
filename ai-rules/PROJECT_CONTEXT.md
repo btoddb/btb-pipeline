@@ -1,13 +1,13 @@
 # Project context
 
-This repository owns the shared `@btb` pipeline for BToddB repositories.
+This repository owns the shared `/btbai` pipeline for BToddB repositories.
 Client repositories should call the reusable workflow at
 `btoddb/btb-pipeline/.github/workflows/btb.yml@v1` instead of copying the
 pipeline implementation.
 
 ## Shared agent contract
 
-The shared `@btb` command contract is injected at runtime from the
+The shared `/btbai` command contract is injected at runtime from the
 `SHARED_AGENT_CONTRACT` environment value in `.github/workflows/btb.yml`.
 Update that workflow value, the executable workflow behavior, and
 `requirements/spec/btb-workflow.md` together when command semantics or phase

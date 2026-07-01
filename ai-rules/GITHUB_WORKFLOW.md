@@ -1,7 +1,7 @@
 # GitHub workflow rules
 
 The reusable workflow in `.github/workflows/btb.yml` is the executable source
-of truth for `@btb` command routing, phase boundaries, tool allow-lists, and
+of truth for `/btbai` command routing, phase boundaries, tool allow-lists, and
 runtime-injected shared agent instructions.
 
 `requirements/spec/btb-workflow.md` is the living behavioral spec. Any
@@ -15,4 +15,4 @@ pointer to the workflow/spec source of truth.
 
 When changing client installation guidance, prefer a tiny caller workflow plus
 repo-local configuration over copied shared markdown. Client repositories should
-receive shared `@btb` behavior by calling `btoddb/btb-pipeline@v1`.
+receive shared `/btbai` behavior by calling `btoddb/btb-pipeline@v1`.

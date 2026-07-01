@@ -1,4 +1,4 @@
-# Reusable `@btb` pipeline shared across BToddB repositories.
+# Reusable `/btbai` pipeline shared across BToddB repositories.
 #
 # Client repositories should call this workflow at
 # btoddb/btb-pipeline/.github/workflows/btb.yml@v1 from a tiny event
@@ -102,12 +102,12 @@ env:
   REVIEW_TOOLS: "Read,Glob,Grep,Bash(python3 -m pytest*),Bash(gh issue create *)"
   IMPL_TOOLS: "Read,Edit,Write,Glob,Grep,Bash(python3 -m pytest*),Bash(scripts/lint *),Bash(gh pr create *),Bash(gh issue create *),Bash(scripts/deploy-card:*),Bash(npm *)"
   SHARED_AGENT_CONTRACT: >-
-    You are running inside the shared btoddb/btb-pipeline @btb workflow.
-    Treat this workflow as the source of truth for @btb command semantics and
-    phase boundaries. Valid issue commands are bare @btb for plan then
-    implement, @btb plan for planning only, and @btb implement for the
-    latest approved plan. Valid pull request commands are @btb review,
-    @btb revise, @btb ship, and bare @btb for conversation. Planning,
+    You are running inside the shared btoddb/btb-pipeline /btbai workflow.
+    Treat this workflow as the source of truth for /btbai command semantics and
+    phase boundaries. Valid issue commands are bare /btbai for plan then
+    implement, /btbai plan for planning only, and /btbai implement for the
+    latest approved plan. Valid pull request commands are /btbai review,
+    /btbai revise, /btbai ship, and bare /btbai for conversation. Planning,
     review, and response phases may read code and file follow-up issues, but
     must not edit files or push branches. Implementation must execute the
     approved plan, create a fresh branch instead of working on main, validate as
@@ -131,16 +131,16 @@ env:
 jobs:
   dispatch:
     # Only fire when the text that actually triggered this event mentions
-    # @btb. Checking issue.body/title for *comment* events would let any
-    # unrelated comment on an @btb-titled issue start (and silently skip)
+    # /btbai. Checking issue.body/title for *comment* events would let any
+    # unrelated comment on an /btbai-titled issue start (and silently skip)
     # the pipeline; gating per event keeps route=skip from ever happening.
     if: |
       (github.event_name == 'issues' &&
-        (contains(github.event.issue.title, '@btb') || contains(github.event.issue.body, '@btb'))) ||
+        (contains(github.event.issue.title, '/btbai') || contains(github.event.issue.body, '/btbai'))) ||
       ((github.event_name == 'issue_comment' || github.event_name == 'pull_request_review_comment') &&
-        contains(github.event.comment.body, '@btb')) ||
+        contains(github.event.comment.body, '/btbai')) ||
       (github.event_name == 'pull_request_review' &&
-        contains(github.event.review.body, '@btb'))
+        contains(github.event.review.body, '/btbai'))
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -149,7 +149,7 @@ jobs:
       plan_only: ${{ steps.route.outputs.plan_only }}
       notify_reason: ${{ steps.route.outputs.notify_reason }}
     steps:
-      - name: Route the @btb command
+      - name: Route the /btbai command
         id: route
         env:
           EVENT: ${{ github.event_name }}
@@ -175,15 +175,15 @@ jobs:
           esac
 
           # Lowercase copy, and the first whitespace-delimited word right after
-          # the first @btb mention ("" = bare @btb / no subcommand).
+          # the first /btbai trigger ("" = bare /btbai / no subcommand).
           lc="$(printf '%s' "$text" | tr '[:upper:]' '[:lower:]')"
-          cmd="$(printf '%s' "$lc" | grep -oE '@btb[[:space:]]+[a-z]+' | head -n1 \
-            | sed -E 's/^@btb[[:space:]]+//' || true)"
+          cmd="$(printf '%s' "$lc" | grep -oE '/btbai[[:space:]]+[a-z]+' | head -n1 \
+            | sed -E 's#^/btbai[[:space:]]+##' || true)"
 
           route=skip
           plan_only=false
           notify_reason=""
-          if printf '%s' "$lc" | grep -q '@btb'; then
+          if printf '%s' "$lc" | grep -q '/btbai'; then
             if [ "$is_pr" = true ]; then
               case "$cmd" in
                 review)         route=review ;;
@@ -228,13 +228,13 @@ jobs:
           set -euo pipefail
           case "$REASON" in
             pr_pipeline)
-              body=$'🤖 `@btb plan` and `@btb implement` run on **issues**, not pull requests — there is no plan/implement pipeline for a PR, so nothing ran.\n\nOn a pull request you can:\n- comment `@btb review` for a code review,\n- comment `@btb revise <what to change>` to iterate on this PR\'s code,\n- comment `@btb ship [--force] [--public-release] (--bump-patch|--bump-minor|--bump-major)` to merge and release, or\n- comment `@btb <your question or request>` and I will respond here.\n\nTo build something new, open an issue and comment `@btb`.' ;;
+              body=$'🤖 `/btbai plan` and `/btbai implement` run on **issues**, not pull requests — there is no plan/implement pipeline for a PR, so nothing ran.\n\nOn a pull request you can:\n- comment `/btbai review` for a code review,\n- comment `/btbai revise <what to change>` to iterate on this PR\'s code,\n- comment `/btbai ship [--force] [--public-release] (--bump-patch|--bump-minor|--bump-major)` to merge and release, or\n- comment `/btbai <your question or request>` and I will respond here.\n\nTo build something new, open an issue and comment `/btbai`.' ;;
             issue_review)
-              body=$'🤖 `@btb review` runs on **pull requests**, not issues, so nothing ran.\n\nOn an issue, comment `@btb` (full pipeline), `@btb plan`, or `@btb implement`.' ;;
+              body=$'🤖 `/btbai review` runs on **pull requests**, not issues, so nothing ran.\n\nOn an issue, comment `/btbai` (full pipeline), `/btbai plan`, or `/btbai implement`.' ;;
             issue_ship)
-              body=$'🤖 `@btb ship` runs on **pull requests**, not issues, so nothing ran.\n\nComment `@btb ship` on an open pull request to squash-merge it and cut a release.' ;;
+              body=$'🤖 `/btbai ship` runs on **pull requests**, not issues, so nothing ran.\n\nComment `/btbai ship` on an open pull request to squash-merge it and cut a release.' ;;
             *)
-              body=$'🤖 I did not recognize that `@btb` command, so nothing ran. Recognized commands:\n- `@btb` — full pipeline (plan → implement) on an issue\n- `@btb plan` — planning only (issue)\n- `@btb implement` — implement the latest plan (issue)\n- `@btb review` — review a pull request\n- `@btb revise` — iterate on a pull request\'s code\n- `@btb ship [--force] [--public-release] (--bump-patch|--bump-minor|--bump-major)` — merge a pull request and cut a release\n\nOn a pull request, `@btb <message>` responds to the conversation.' ;;
+              body=$'🤖 I did not recognize that `/btbai` command, so nothing ran. Recognized commands:\n- `/btbai` — full pipeline (plan → implement) on an issue\n- `/btbai plan` — planning only (issue)\n- `/btbai implement` — implement the latest plan (issue)\n- `/btbai review` — review a pull request\n- `/btbai revise` — iterate on a pull request\'s code\n- `/btbai ship [--force] [--public-release] (--bump-patch|--bump-minor|--bump-major)` — merge a pull request and cut a release\n\nOn a pull request, `/btbai <message>` responds to the conversation.' ;;
           esac
           gh issue comment "$NUMBER" --repo "$REPO" --body "$body"
 
@@ -260,7 +260,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          trigger_phrase: "@btb"
+          trigger_phrase: "/btbai"
           claude_args: |
             --model ${{ github.event_name == 'pull_request_review' && inputs.respond-model-pr-review || inputs.respond-model-followup }}
             --append-system-prompt "${{ env.SHARED_AGENT_CONTRACT }}"
@@ -293,7 +293,7 @@ jobs:
 
   revise:
     # PR-only iteration: re-implement on the existing PR branch from the
-    # feedback in the @btb revise comment. Unlike `respond`, this gets the
+    # feedback in the /btbai revise comment. Unlike `respond`, this gets the
     # full code-changing toolset (IMPL_TOOLS + implement-allowed-tools) and the
     # language setup, so it can run lint/tests/deploy/npm while iterating.
     needs: dispatch
@@ -348,7 +348,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          trigger_phrase: "@btb"
+          trigger_phrase: "/btbai"
           claude_args: |
             --model ${{ inputs.implement-model }}
             --effort ${{ inputs.implement-effort }}
@@ -418,7 +418,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          trigger_phrase: "@btb"
+          trigger_phrase: "/btbai"
           claude_args: |
             --model ${{ inputs.review-model }}
             --effort ${{ inputs.review-effort }}
@@ -477,14 +477,14 @@ jobs:
             OWNER|MEMBER|COLLABORATOR) ;;
             *)
               gh issue comment "$PR_NUMBER" --repo "$REPO" \
-                --body "🤖 \`@btb ship\` is restricted to repository collaborators. Nothing ran."
+                --body "🤖 \`/btbai ship\` is restricted to repository collaborators. Nothing ran."
               echo "proceed=false" >> "$GITHUB_OUTPUT"
               exit 0
               ;;
           esac
 
-          # Extract original-case args after "@btb ship" to preserve case-sensitive values.
-          extra="$(printf '%s' "$COMMENT_BODY" | grep -oiE '@btb[[:space:]]+ship[[:space:]]*.*' | head -n1 \
+          # Extract original-case args after "/btbai ship" to preserve case-sensitive values.
+          extra="$(printf '%s' "$COMMENT_BODY" | grep -oiE '/btbai[[:space:]]+ship[[:space:]]*.*' | head -n1 \
             | sed -E 's/^[^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]*//' || true)"
           force=false
           ship_args=""
@@ -515,7 +515,7 @@ jobs:
               --jq '[(.statusCheckRollup // [])[] | select((.conclusion == "SUCCESS" or .conclusion == "SKIPPED" or .conclusion == "NEUTRAL" or .state == "SUCCESS") | not) | "- **\(.name)**: \(.conclusion // .state // "pending")"] | join("\n")')"
             if [ -n "$not_green_list" ]; then
               gh issue comment "$PR_NUMBER" --repo "$REPO" \
-                --body "$(printf '🤖 Cannot ship — the following checks are not green:\n\n%s\n\nFix or wait for them, then retry. Use `@btb ship --force` to merge anyway.' "$not_green_list")"
+                --body "$(printf '🤖 Cannot ship — the following checks are not green:\n\n%s\n\nFix or wait for them, then retry. Use `/btbai ship --force` to merge anyway.' "$not_green_list")"
               echo "proceed=false" >> "$GITHUB_OUTPUT"
               exit 0
             fi
@@ -596,7 +596,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          trigger_phrase: "@btb"
+          trigger_phrase: "/btbai"
           claude_args: |
             --model ${{ inputs.plan-model }}
             --effort ${{ inputs.plan-effort }}
@@ -646,10 +646,10 @@ jobs:
           if [ -z "$plan" ] || [ -z "$plan_id" ]; then
             if [ "$CLAUDE_OUTCOME" = "failure" ]; then
               gh issue comment "$ISSUE" --repo "$REPO" --body \
-                "🤖 @${MAINTAINER} the **Planning** phase failed. Check the Actions run, then re-comment \`@btb plan\` to retry."
+                "🤖 @${MAINTAINER} the **Planning** phase failed. Check the Actions run, then re-comment \`/btbai plan\` to retry."
             else
               gh issue comment "$ISSUE" --repo "$REPO" --body \
-                "🤖 @${MAINTAINER} planning ran but produced **no plan comment**, so the pipeline could not hand off to implementation. Please re-run \`@btb plan\`."
+                "🤖 @${MAINTAINER} planning ran but produced **no plan comment**, so the pipeline could not hand off to implementation. Please re-run \`/btbai plan\`."
             fi
             echo "proceed=false" >> "$GITHUB_OUTPUT"
             echo "::error::Planning produced no plan comment; failing so the skip is never silent."
@@ -671,10 +671,10 @@ jobs:
               '🤖 Plan has no open questions — proceeding to implementation.')"
           elif [ "$has_questions" = true ]; then
             body="$(printf '%s\n%s\n\n%s\n' '<!-- btb:plan -->' "$plan_pointer" \
-              "🤖 @${MAINTAINER} the plan above has open \`[QUESTION]\` items — implementation is parked until they are resolved. Reply with answers, then comment \`@btb\` to re-plan, or \`@btb implement\` to build it as-is.")"
+              "🤖 @${MAINTAINER} the plan above has open \`[QUESTION]\` items — implementation is parked until they are resolved. Reply with answers, then comment \`/btbai\` to re-plan, or \`/btbai implement\` to build it as-is.")"
           else
             body="$(printf '%s\n%s\n\n%s\n' '<!-- btb:plan -->' "$plan_pointer" \
-              '🤖 Plan-only run — implementation was not started. Comment `@btb implement` to build this plan.')"
+              '🤖 Plan-only run — implementation was not started. Comment `/btbai implement` to build this plan.')"
           fi
           gh issue comment "$ISSUE" --repo "$REPO" --body "$body"
 
@@ -712,7 +712,7 @@ jobs:
 
           if [ -z "$marker" ]; then
             gh issue comment "$ISSUE" --repo "$REPO" --body \
-              "🤖 @${MAINTAINER} \`@btb implement\` found no approved plan marker to build. Run \`@btb plan\` first, or \`@btb\` for the full pipeline."
+              "🤖 @${MAINTAINER} \`/btbai implement\` found no approved plan marker to build. Run \`/btbai plan\` first, or \`/btbai\` for the full pipeline."
             echo "has_plan=false" >> "$GITHUB_OUTPUT"
             echo "::error::No approved plan marker found."
             exit 1
@@ -744,7 +744,7 @@ jobs:
 
           if [ -z "$plan_body" ] || [ -z "$resolved_plan_id" ]; then
             gh issue comment "$ISSUE" --repo "$REPO" --body \
-              "🤖 @${MAINTAINER} \`@btb implement\` found an approved plan marker, but could not resolve the plan comment body. Please re-run \`@btb plan\`."
+              "🤖 @${MAINTAINER} \`/btbai implement\` found an approved plan marker, but could not resolve the plan comment body. Please re-run \`/btbai plan\`."
             echo "has_plan=false" >> "$GITHUB_OUTPUT"
             echo "::error::Approved plan marker did not resolve to a plan comment."
             exit 1
@@ -787,12 +787,12 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          trigger_phrase: "@btb"
+          trigger_phrase: "/btbai"
           track_progress: true
           prompt: |
-            You are running the `@btb` implementation phase for issue #${{ github.event.issue.number }}.
+            You are running the `/btbai` implementation phase for issue #${{ github.event.issue.number }}.
 
-            The trigger comment may only contain `@btb`; do not treat that as the full task.
+            The trigger comment may only contain `/btbai`; do not treat that as the full task.
             The workflow has already selected the approved Opus plan below. Execute this plan.
 
             Do not draft or post another implementation plan as the final deliverable. Make the code changes,
@@ -832,7 +832,7 @@ jobs:
 
           if [ -z "$BRANCH" ]; then
             gh issue comment "$ISSUE" --repo "$REPO" --body \
-              "🤖 @${MAINTAINER} the **Implementation** phase finished without reporting a branch, so no pull request could be created. Check the Actions run, then re-comment \`@btb implement\` to retry."
+              "🤖 @${MAINTAINER} the **Implementation** phase finished without reporting a branch, so no pull request could be created. Check the Actions run, then re-comment \`/btbai implement\` to retry."
             echo "::error::Implementation finished without a branch."
             exit 1
           fi
@@ -847,7 +847,7 @@ jobs:
           branch_path="$(jq -nr --arg branch "$BRANCH" '$branch | @uri')"
           if ! gh api "repos/$REPO/branches/$branch_path" >/dev/null 2>&1; then
             gh issue comment "$ISSUE" --repo "$REPO" --body \
-              "🤖 @${MAINTAINER} the **Implementation** phase finished, but branch \`$BRANCH\` was not pushed, so no pull request could be created. Check the Actions run, then re-comment \`@btb implement\` to retry."
+              "🤖 @${MAINTAINER} the **Implementation** phase finished, but branch \`$BRANCH\` was not pushed, so no pull request could be created. Check the Actions run, then re-comment \`/btbai implement\` to retry."
             echo "::error::Implementation branch was not pushed: $BRANCH"
             exit 1
           fi
@@ -855,7 +855,7 @@ jobs:
           commits="$(gh api "repos/$REPO/compare/main...$branch_path" --jq '.total_commits // 0')"
           if [ "$commits" = "0" ]; then
             gh issue comment "$ISSUE" --repo "$REPO" --body \
-              "🤖 @${MAINTAINER} the **Implementation** phase pushed branch \`$BRANCH\`, but it has no changes compared with \`main\`, so no pull request was created. Check the Actions run, then re-comment \`@btb implement\` to retry."
+              "🤖 @${MAINTAINER} the **Implementation** phase pushed branch \`$BRANCH\`, but it has no changes compared with \`main\`, so no pull request was created. Check the Actions run, then re-comment \`/btbai implement\` to retry."
             echo "::error::Implementation branch has no changes compared with main."
             exit 1
           fi

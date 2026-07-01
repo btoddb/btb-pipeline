@@ -2,7 +2,7 @@
 #
 # Cut a GitHub release for this repo.
 #
-# The @btb ship command merges the PR, checks out main, then calls this
+# The /btbai ship command merges the PR, checks out main, then calls this
 # script. You can also run it directly from a clean main branch.
 #
 # Usage:

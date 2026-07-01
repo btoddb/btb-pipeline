@@ -1,10 +1,10 @@
-# Thin per-repo caller for the shared `@btb` pipeline.
+# Thin per-repo caller for the shared `/btbai` pipeline.
 #
 # This file is a TEMPLATE, not an active workflow: once <OWNER>/<PIPELINE_REPO>
 # exists and is tagged v1, copy this into a consuming repo's
 # `.github/workflows/btb-client.yml` (replacing whatever is there), fill in the
 # `with:` block for that repo, and keep repo-specific agent guidance in that
-# repo's own CLAUDE.md / AGENTS.md / ai-rules files. The shared @btb command
+# repo's own CLAUDE.md / AGENTS.md / ai-rules files. The shared /btbai command
 # contract is injected by the reusable workflow at runtime.
 #
 # Event triggers and concurrency MUST live in the caller — a reusable workflow
