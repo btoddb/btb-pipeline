@@ -2,7 +2,7 @@
 
 ## Shared agent contract
 
-1. **constraint BW-20** The reusable workflow must inject the shared `@btb`
+1. **constraint BW-20** The reusable workflow must inject the shared `/btbai`
    command contract into every LLM-running phase at runtime. The injected
    contract must cover command routing, phase boundaries, code-write
    restrictions, PR/revision/review expectations, ship behavior, non-interactive
@@ -20,13 +20,13 @@
    guidance together. Do not add another long-form copy of the contract as a
    template.
 4. **constraint BW-23** Every `anthropics/claude-code-action@v1` step in the
-   reusable workflow must set `trigger_phrase: "@btb"`. The action has its own
+   reusable workflow must set `trigger_phrase: "/btbai"`. The action has its own
    built-in trigger gate that defaults to `@claude` and silently skips running
    Claude (no error, no output) whenever no explicit `prompt` input is
    supplied and the triggering text does not contain the configured phrase.
    Without this override, any phase invoked without an explicit `prompt`
    (`plan`, `respond`, `revise`, `review`) would never actually run even
-   though `dispatch` already routed the event on `@btb`, producing a
+   though `dispatch` already routed the event on `/btbai`, producing a
    downstream "no output" failure instead of a clear error.
 
 ## Follow-up issues
@@ -46,17 +46,17 @@
 
 ## Ship command
 
-1. **constraint BW-5** `@btb ship` runs only on open pull requests. On an
+1. **constraint BW-5** `/btbai ship` runs only on open pull requests. On an
    issue, it posts a notify message directing the user to comment on an open
    pull request instead.
 2. **constraint BW-6** By default, ship requires all status checks to be green
    before merging. Failed, cancelled, timed-out, pending, and in-progress checks
    all block the merge, and the blocking comment must name each non-green check.
-3. **constraint BW-7** `@btb ship --force` skips the all-green guard and
+3. **constraint BW-7** `/btbai ship --force` skips the all-green guard and
    attempts the merge anyway.
 4. **constraint BW-8** Ship squash-merges the pull request with
    `gh pr merge --squash --delete-branch` and deletes the head branch. The human
-   `@btb ship` comment is the approval signal; no separate approval command
+   `/btbai ship` comment is the approval signal; no separate approval command
    is required.
 5. **constraint BW-9** After merging, ship checks out the updated `main` branch
    and runs `scripts/ship` in the repository root.

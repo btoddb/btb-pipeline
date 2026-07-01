@@ -55,9 +55,9 @@ gh secret set CLAUDE_CODE_OAUTH_TOKEN --app actions --repo btoddb/<repo>
   filling in the `with:` block (`maintainer`, `setup`, language version,
   `install-command`, and any `*-allowed-tools` the repo needs) for that repo
 - templates/PROJECT_CONTEXT-pipeline.md to <repo>/ai-rules/PROJECT_CONTEXT.md
-  only as a local-rules starter. Do not paste the shared `@btb` command
+  only as a local-rules starter. Do not paste the shared `/btbai` command
   contract into client repos; the reusable workflow injects that at runtime.
-- templates/ship.template to <repo>/scripts/ship (required for `@btb ship`; supports `--public-release`, appends a `beta` suffix for non-public release tags, and requires exactly one of `--bump-patch`, `--bump-minor`, or `--bump-major`)
+- templates/ship.template to <repo>/scripts/ship (required for `/btbai ship`; supports `--public-release`, appends a `beta` suffix for non-public release tags, and requires exactly one of `--bump-patch`, `--bump-minor`, or `--bump-major`)
 
 ## Install Claude
 
@@ -70,9 +70,9 @@ from terminal -> repo
 
 # Dependabot
 
-[`dependabot-review.yml`](.github/workflows/dependabot-review.yml) posts `@btb
+[`dependabot-review.yml`](.github/workflows/dependabot-review.yml) posts `/btbai
 review` on every Dependabot PR so it gets the same BTB review path a human
-typing that comment would trigger (see the `@btb` command semantics in
+typing that comment would trigger (see the `/btbai` command semantics in
 [ai-rules/GITHUB_WORKFLOW.md](ai-rules/GITHUB_WORKFLOW.md) and
 [requirements/spec/btb-workflow.md](requirements/spec/btb-workflow.md)).
 

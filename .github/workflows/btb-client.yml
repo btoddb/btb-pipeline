@@ -1,6 +1,6 @@
 # Caller workflow for this repo (claude-pipeline itself).
 # The reusable pipeline lives at btb.yml (workflow_call only); this file
-# provides the event triggers so @btb works on issues and PRs here too.
+# provides the event triggers so /btbai works on issues and PRs here too.
 
 name: BTB Pipeline
 

@@ -1,7 +1,7 @@
 name: Dependabot BTB Review
 
 # Dependabot has no built-in way to post a follow-up comment or template the
-# PR description, so we post the "@btb review" trigger ourselves. This
+# PR description, so we post the "/btbai review" trigger ourselves. This
 # comment is then picked up by btb-client.yml's issue_comment listener, which
 # routes it through the same review job a human typing it would trigger.
 #
@@ -19,8 +19,8 @@ jobs:
     if: github.actor == 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
-      - name: Comment "@btb review"
+      - name: Comment "/btbai review"
         env:
           GH_TOKEN: ${{ secrets.DEPENDABOT_REVIEW_PAT }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "@btb review"
+        run: gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "/btbai review"

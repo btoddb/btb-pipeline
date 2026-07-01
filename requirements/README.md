@@ -16,7 +16,7 @@ Spec files:
 
 | File | Area |
 |---|---|
-| [`spec/btb-workflow.md`](spec/btb-workflow.md) | `@btb` workflow behavior |
+| [`spec/btb-workflow.md`](spec/btb-workflow.md) | `/btbai` workflow behavior |
 
 ## How to write requirements (for humans)
 
