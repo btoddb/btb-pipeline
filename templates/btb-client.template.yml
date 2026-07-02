@@ -1,6 +1,6 @@
 # Thin per-repo caller for the shared `/btbai` pipeline.
 #
-# This file is a TEMPLATE, not an active workflow: once <OWNER>/<PIPELINE_REPO>
+# This file is a TEMPLATE, not an active workflow: once btoddb/btb-pipeline
 # exists and is tagged v1, copy this into a consuming repo's
 # `.github/workflows/btb-client.yml` (replacing whatever is there), fill in the
 # `with:` block for that repo, and keep repo-specific agent guidance in that

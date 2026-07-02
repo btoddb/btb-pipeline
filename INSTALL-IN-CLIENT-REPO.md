@@ -90,7 +90,7 @@ Add the DEPENDABOT_REVIEW_PAT as a Dependabot secret (not actions secret) on the
 
 ## Install
 
-Copy templates/dependabot.yml.template to your repo's .github/dependabot.yml
-Copy templates/dependabot-review.yml.template to your repo's .github/workflows/dependabot-review.yml
+1. Copy templates/dependabot.yml.template to your repo's .github/dependabot.yml
+1. Copy templates/dependabot-review.yml.template to your repo's .github/workflows/dependabot-review.yml
 
 # Notes
