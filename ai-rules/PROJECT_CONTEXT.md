@@ -32,3 +32,4 @@ short pointers only.
   - For Typescript, use Vitest
   - For Java, use JUnit 6
   - For Python, use Pytest
+- If you can't make a needed change, give clear instructions on how I must manually change it.  Assume I'm a 5 year old that knows how to write, but I know nothing else.
