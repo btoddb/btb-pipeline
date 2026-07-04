@@ -1,6 +1,6 @@
 # Project context template for client repositories
 
-## Remove this after reading
+## Remove this section after reading
 
 The shared `/btbai` command contract is injected at runtime by
 `btoddb/btb-pipeline`. Do not paste that shared workflow behavior into client
@@ -23,7 +23,7 @@ of editing every client repository.
 
 - Follow every file in `ai-rules/` before editing.
 - Work on a fresh branch from `main`; never edit directly on `main`.
-- Keep the living spec in `requirements/spec/` synchronized with workflow
+- Keep the living spec in `requirements/spec/` synchronized with project
   behavior changes.
 - For new code, always create a unit test
   - For Typescript, use Vitest
