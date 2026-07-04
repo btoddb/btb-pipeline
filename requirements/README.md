@@ -1,6 +1,6 @@
 # Requirements
 
-This folder is the **functional source of truth** for `btb`.
+This folder is the **functional source of truth** for this project.
 It is written for both humans and the AI agent. If the code and a `spec/` file
 disagree, that's a bug in one of them — say so rather than guessing.
 
@@ -8,7 +8,7 @@ disagree, that's a bug in one of them — say so rather than guessing.
 
 | Path | What it holds |
 |---|---|
-| [`spec/`](spec/) | The **living spec**: how the integration behaves *today*. Always kept in sync with shipped code. |
+| [`spec/`](spec/) | The **living spec**: how the project behaves *today*. Always kept in sync with shipped code. |
 | [`proposals/`](proposals/) | New features / changes, written as deltas against the spec. Deleted once folded into `spec/`. |
 | [`TEMPLATE.md`](TEMPLATE.md) | Copy this to start a new proposal. |
 
