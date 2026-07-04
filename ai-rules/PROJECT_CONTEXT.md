@@ -17,13 +17,18 @@ Do not paste the full shared contract into `CLAUDE.md`, `AGENTS.md`, client
 `ai-rules`, or templates. Those files should contain local repo guidance and
 short pointers only.
 
-## Codex rules
+## Agent rules
+
+- Treat `templates/` as client bootstrap material, not another source of truth
+  for shared pipeline behavior.
+- When a fix needs to reach client repositories, release this repository and move
+  the floating `v1` tag as part of the ship flow.
 
 - Follow every file in `ai-rules/` before editing.
 - Work on a fresh branch from `main`; never edit directly on `main`.
 - Keep the living spec in `requirements/spec/` synchronized with workflow
   behavior changes.
-- Treat `templates/` as client bootstrap material, not another source of truth
-  for shared pipeline behavior.
-- When a fix needs to reach client repositories, release this repository and move
-  the floating `v1` tag as part of the ship flow.
+- For new code, always create a unit test
+  - For Typescript, use Vitest
+  - For Java, use JUnit 6
+  - For Python, use Pytest

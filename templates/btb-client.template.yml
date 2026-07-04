@@ -39,9 +39,10 @@ jobs:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
     with:
       maintainer: btoddb
-      setup: python # or "node" / "none"
+      setup: python # "python" / "node" / "java" / "none"
       python-version: "3.14"
       install-command: pip install -r requirements.txt
+      #java-version: "25"
       #plan-allowed-tools: ""
       #implement-allowed-tools: "Bash(scripts/deploy-card:*),Bash(npm *)"
       #review-allowed-tools: ""

@@ -15,7 +15,7 @@ on:
         type: string
         required: true
       setup:
-        description: Language runtime to set up before lint/test phases ("python", "node", or "none")
+        description: Language runtime to set up before lint/test phases ("python", "node", "java", or "none")
         type: string
         required: false
         default: "none"
@@ -27,6 +27,10 @@ on:
         type: string
         required: false
         default: "22"
+      java-version:
+        type: string
+        required: false
+        default: "25"
       install-command:
         description: Shell command to install dependencies (run from the repo root after setup)
         type: string
@@ -99,8 +103,8 @@ on:
 env:
   PLAN_TOOLS: "Read,Glob,Grep,Bash(gh issue create *)"
   RESPOND_TOOLS: "Read,Glob,Grep,Bash(gh issue create *)"
-  REVIEW_TOOLS: "Read,Glob,Grep,Bash(python3 -m pytest*),Bash(gh issue create *)"
-  IMPL_TOOLS: "Read,Edit,Write,Glob,Grep,Bash(python3 -m pytest*),Bash(scripts/lint *),Bash(gh pr create *),Bash(gh issue create *),Bash(scripts/deploy-card:*),Bash(npm *)"
+  REVIEW_TOOLS: "Read,Glob,Grep,Bash(python3 -m pytest*),Bash(./gradlew test*),Bash(./gradlew check*),Bash(gh issue create *)"
+  IMPL_TOOLS: "Read,Edit,Write,Glob,Grep,Bash(python3 -m pytest*),Bash(./gradlew *),Bash(scripts/lint *),Bash(gh pr create *),Bash(gh issue create *),Bash(scripts/deploy-card:*),Bash(npm *)"
   SHARED_AGENT_CONTRACT: >-
     You are running inside the shared btoddb/btb-pipeline /btbai workflow.
     Treat this workflow as the source of truth for /btbai command semantics and
@@ -338,6 +342,12 @@ jobs:
         with:
           node-version: ${{ inputs.node-version }}
           cache: "npm"
+      - name: Set up Java
+        if: inputs.setup == 'java'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ inputs.java-version }}
       - name: Install dependencies
         if: inputs.install-command != ''
         run: ${{ inputs.install-command }}
@@ -395,7 +405,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          fetch-depth: 1
+          fetch-depth: 0
       - name: Set up Python
         if: inputs.setup == 'python'
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
@@ -408,6 +418,12 @@ jobs:
         with:
           node-version: ${{ inputs.node-version }}
           cache: "npm"
+      - name: Set up Java
+        if: inputs.setup == 'java'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ inputs.java-version }}
       - name: Install dependencies
         if: inputs.install-command != ''
         run: ${{ inputs.install-command }}
@@ -776,6 +792,12 @@ jobs:
         with:
           node-version: ${{ inputs.node-version }}
           cache: "npm"
+      - name: Set up Java
+        if: steps.approved_plan.outputs.has_plan == 'true' && inputs.setup == 'java'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ inputs.java-version }}
       - name: Install dependencies
         if: steps.approved_plan.outputs.has_plan == 'true' && inputs.install-command != ''
         run: ${{ inputs.install-command }}

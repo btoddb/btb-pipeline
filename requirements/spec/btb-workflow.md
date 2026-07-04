@@ -29,6 +29,23 @@
    though `dispatch` already routed the event on `/btbai`, producing a
    downstream "no output" failure instead of a clear error.
 
+## Runtime setup
+
+1. **constraint BW-24** The reusable workflow's `setup` input supports
+   `python`, `node`, `java`, and `none`. Java setup must run in every
+   validation/code-running phase that already supports Python and Node setup
+   (`implement`, `revise`, and `review`), default to Java 25, use the Temurin
+   distribution, and avoid mandatory dependency-cache preconditions so setup
+   does not fail before Claude runs in repositories without committed Gradle
+   metadata.
+2. **constraint BW-25** Java repositories must be able to validate through the
+   default Claude tool allow-lists: review may run Gradle test/check commands,
+   and implementation/revision may run Gradle commands needed to build, test,
+   and update project files.
+3. **constraint BW-26** Review, revision, and implementation checkouts must use
+   full git history so Gradle builds that derive versions from tags or commit
+   history behave consistently across phases.
+
 ## Follow-up issues
 
 1. **constraint BW-1** Every LLM-running phase (`respond`, `plan`,

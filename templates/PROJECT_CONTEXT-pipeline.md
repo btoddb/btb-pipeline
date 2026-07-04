@@ -1,5 +1,7 @@
 # Project context template for client repositories
 
+## Remove this section after reading
+
 The shared `/btbai` command contract is injected at runtime by
 `btoddb/btb-pipeline`. Do not paste that shared workflow behavior into client
 repositories; copied contract text drifts as the pipeline evolves.
@@ -16,3 +18,14 @@ the shared pipeline cannot know, such as:
 Keep those local rules short and specific. When the shared pipeline behavior
 changes, update `btoddb/btb-pipeline` and release the moving `v1` tag instead
 of editing every client repository.
+
+## Agent rules
+
+- Follow every file in `ai-rules/` before editing.
+- Work on a fresh branch from `main`; never edit directly on `main`.
+- Keep the living spec in `requirements/spec/` synchronized with project
+  behavior changes.
+- For new code, always create a unit test
+  - For Typescript, use Vitest
+  - For Java, use JUnit 6
+  - For Python, use Pytest
