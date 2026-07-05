@@ -62,6 +62,10 @@ gh secret set CLAUDE_CODE_OAUTH_TOKEN --app actions --repo btoddb/<repo>
     the shared base ship command, or
   - omit scripts/ship and let the reusable workflow run the shared base ship
     command directly.
+- The thin wrapper auto-bootstraps `btoddb/btb-pipeline@v1` into
+  `<repo>/.btb-pipeline` for local runs when that checkout is missing, and adds
+  `/.btb-pipeline/` to `.git/info/exclude` so the local cache does not show up
+  as an untracked repo file.
 - Put repo-specific release work in executable hooks under <repo>/scripts/ship.d/
   when needed. Supported hook names are before-version, after-version,
   before-release-commit, after-release-commit, before-github-release, and
