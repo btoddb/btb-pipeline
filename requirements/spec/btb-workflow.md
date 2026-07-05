@@ -75,28 +75,38 @@
    `gh pr merge --squash --delete-branch` and deletes the head branch. The human
    `/btbai ship` comment is the approval signal; no separate approval command
    is required.
-5. **constraint BW-9** After merging, ship checks out the updated `main` branch
-   and runs `scripts/ship` in the repository root.
-6. **constraint BW-10** Before running `scripts/ship`, ship configures the local
-   checkout's Git author as `github-actions[bot]` so per-repository release
-   hooks can create release commits and annotated tags in CI.
-7. **constraint BW-11** If `scripts/ship` is missing, ship fails with guidance to
-   create one from `templates/ship.template`.
-8. **constraint BW-12** `scripts/ship` is the per-repository release hook. The
-   pipeline's `templates/ship.template` is a reference implementation that
-   creates a pre-release by default.
-9. **recommendation BW-13** Client `scripts/ship` implementations should support
-   `--public-release`, `--bump-patch`, `--bump-minor`, and `--bump-major`. The
-   workflow forwards these flags to `scripts/ship`; `--public-release` creates a
-   public latest release, non-public releases append a `beta` suffix to the
-   version/tag, and exactly one bump flag is required to increment the release
-   version by patch, minor, or major.
-10. **constraint BW-14** `scripts/ship` in `btoddb/btb-pipeline` keeps the
-   reusable-workflow release behavior by floating the lightweight `v1` major tag
-   directly to the released commit while accepting the same release flags as
-   `templates/ship.template`. When it runs in GitHub Actions, it skips the
-   interactive confirmation prompt automatically.
-11. **constraint BW-15** On any ship failure, including preflight, merge, and
+5. **constraint BW-9** After merging, ship checks out the updated `main` branch,
+   checks out `btoddb/btb-pipeline@v1` into `.btb-pipeline`, and runs the
+   repository release command.
+6. **constraint BW-10** Before running the release command, ship configures the
+   local checkout's Git author as `github-actions[bot]` so release hooks can
+   create release commits and annotated tags in CI.
+7. **constraint BW-11** If `scripts/ship` exists, ship runs it from the
+   repository root with `BTB_PIPELINE_ROOT` pointing at the checked-out pipeline.
+   If `scripts/ship` is missing, ship runs `.btb-pipeline/scripts/btb-ship-base`
+   directly against the repository root.
+8. **constraint BW-12** `scripts/btb-ship-base` owns common release mechanics:
+   version/tag resolution, clean-main validation, duplicate-tag checks, optional
+   `VERSION` updates, release commit creation when files changed, pushing
+   `main`, creating the immutable version tag, and creating the GitHub release.
+9. **constraint BW-13** The base release command supports repo-local executable
+   hooks under `scripts/ship.d/` named `before-version`, `after-version`,
+   `before-release-commit`, `after-release-commit`, `before-github-release`, and
+   `after-github-release`. Hooks receive `BTB_REPO_ROOT`, `BTB_VERSION_TAG`,
+   `BTB_PUBLIC_RELEASE`, `BTB_DRY_RUN`, `BTB_BUMP`, and
+   `BTB_RELEASE_COMMIT_CREATED`.
+10. **constraint BW-14** Client release commands and the base release command
+   must support `--public-release`, `--bump-patch`, `--bump-minor`,
+   `--bump-major`, and `--dry-run`; `--set-version vX.Y.Z` remains supported for
+   explicit releases. The workflow forwards all non-`--force` ship arguments to
+   the release command. Non-public releases create a pre-release titled
+   `<tag>-beta`, and exactly one version option is required.
+11. **constraint BW-27** `scripts/ship` in `btoddb/btb-pipeline` uses the shared
+   base release command, requires releases to stay under the `v1` major line,
+   and then floats the lightweight `v1` major tag directly to the released
+   commit. When it runs in GitHub Actions, it skips the interactive confirmation
+   prompt automatically.
+12. **constraint BW-15** On any ship failure, including preflight, merge, and
     release-hook failures, the `report-failure` action tags the maintainer with
     the phase name `Ship`.
 

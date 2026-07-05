@@ -57,7 +57,19 @@ gh secret set CLAUDE_CODE_OAUTH_TOKEN --app actions --repo btoddb/<repo>
 - templates/PROJECT_CONTEXT-pipeline.md to <repo>/ai-rules/PROJECT_CONTEXT.md
   only as a local-rules starter. Do not paste the shared `/btbai` command
   contract into client repos; the reusable workflow injects that at runtime.
-- templates/ship.template to <repo>/scripts/ship (required for `/btbai ship`; supports `--public-release`, appends a `beta` suffix for non-public release tags, and requires exactly one of `--bump-patch`, `--bump-minor`, or `--bump-major`)
+- For `/btbai ship`, either:
+  - copy templates/ship.template to <repo>/scripts/ship as a thin wrapper around
+    the shared base ship command, or
+  - omit scripts/ship and let the reusable workflow run the shared base ship
+    command directly.
+- Put repo-specific release work in executable hooks under <repo>/scripts/ship.d/
+  when needed. Supported hook names are before-version, after-version,
+  before-release-commit, after-release-commit, before-github-release, and
+  after-github-release. For HA cards, before-release-commit is where
+  scripts/deploy-card belongs.
+- The base ship command supports --public-release, --set-version vX.Y.Z,
+  --bump-patch, --bump-minor, --bump-major, and --dry-run. Non-public releases
+  create a pre-release titled <tag>-beta.
 
 ## Install Claude
 

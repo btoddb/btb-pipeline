@@ -121,7 +121,8 @@ env:
     change code; tag any substantive review comment with one of [REQUIRED],
     [QUESTION], [NIT], or [PRAISE], and write a short warm summary rather than a
     bare LGTM. Ship is deterministic, requires a PR, checks green status unless
-    forced, squash-merges, then runs the repo release hook. Use GitHub CLI
+    forced, squash-merges, then runs the repo release hook or shared base ship
+    command with repo-local hooks. Use GitHub CLI
     commands non-interactively with required flags provided. When planning, post
     the plan as an issue comment and do not write any <!-- btb:* --> markers
     yourself, the workflow stamps those; if the plan has a genuine blocker, write
@@ -556,27 +557,43 @@ jobs:
           ref: main
           fetch-depth: 0
 
+      - name: Checkout BTB pipeline
+        if: steps.preflight.outputs.proceed == 'true'
+        uses: actions/checkout@v6
+        with:
+          repository: btoddb/btb-pipeline
+          ref: v1
+          path: .btb-pipeline
+          fetch-depth: 1
+
+      - name: Ignore pipeline checkout
+        if: steps.preflight.outputs.proceed == 'true'
+        run: echo /.btb-pipeline/ >> .git/info/exclude
+
       - name: Configure git author
         if: steps.preflight.outputs.proceed == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Run scripts/ship
+      - name: Run release command
         if: steps.preflight.outputs.proceed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           SHIP_ARGS: ${{ steps.preflight.outputs.ship_args }}
+          BTB_PIPELINE_ROOT: ${{ github.workspace }}/.btb-pipeline
         run: |
           set -euo pipefail
-          if [ ! -f scripts/ship ]; then
-            echo "::error::scripts/ship not found — create it from templates/ship.template."
-            exit 1
-          fi
-          chmod +x scripts/ship
           set -f
-          # shellcheck disable=SC2086
-          scripts/ship $SHIP_ARGS
+          if [ -f scripts/ship ]; then
+            chmod +x scripts/ship
+            # shellcheck disable=SC2086
+            scripts/ship $SHIP_ARGS
+          else
+            chmod +x "$BTB_PIPELINE_ROOT/scripts/btb-ship-base"
+            # shellcheck disable=SC2086
+            "$BTB_PIPELINE_ROOT/scripts/btb-ship-base" --repo-root "$GITHUB_WORKSPACE" $SHIP_ARGS
+          fi
 
       - name: Report failure
         if: failure()

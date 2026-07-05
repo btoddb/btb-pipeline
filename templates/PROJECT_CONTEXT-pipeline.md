@@ -13,6 +13,7 @@ the shared pipeline cannot know, such as:
 - repo-specific lint, test, build, deploy, or validation commands
 - generated artifacts that are intentionally committed
 - release details that differ from the standard `scripts/ship` contract
+- repo-local `scripts/ship.d/` release hooks, such as generated asset builds
 - project-specific security or review constraints
 
 Keep those local rules short and specific. When the shared pipeline behavior
