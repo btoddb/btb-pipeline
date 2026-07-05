@@ -13,9 +13,10 @@ PIPELINE_ROOT="${BTB_PIPELINE_ROOT:-$REPO_ROOT/.btb-pipeline}"
 BASE_SHIP="$PIPELINE_ROOT/scripts/btb-ship-base"
 
 exclude_default_pipeline_checkout() {
-    local exclude_file="$REPO_ROOT/.git/info/exclude"
+    local exclude_file
     local pattern="/.btb-pipeline/"
 
+    exclude_file="$(git -C "$REPO_ROOT" rev-parse --git-path info/exclude)"
     mkdir -p "$(dirname "$exclude_file")"
     touch "$exclude_file"
     grep -Fxq "$pattern" "$exclude_file" || printf '%s\n' "$pattern" >> "$exclude_file"

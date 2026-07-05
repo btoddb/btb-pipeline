@@ -75,6 +75,17 @@ def make_client_repo(tmp_path):
     return repo
 
 
+def make_worktree_client_repo(tmp_path):
+    repo = tmp_path / "client-worktree"
+    scripts_dir = repo / "scripts"
+    git_dir = tmp_path / "client-worktree.git"
+    scripts_dir.mkdir(parents=True)
+    (repo / ".git").write_text(f"gitdir: {git_dir}\n")
+    (git_dir / "info").mkdir(parents=True)
+    shutil.copy2(SHIP_TEMPLATE, scripts_dir / "ship")
+    return repo, git_dir
+
+
 def test_runs_hooks_in_order_and_creates_release_commit(tmp_path):
     repo, origin = make_repo(tmp_path)
     env, gh_log = make_env(tmp_path)
@@ -210,6 +221,10 @@ def test_client_ship_template_bootstraps_default_local_checkout(tmp_path):
         fake_git,
         "#!/usr/bin/env bash\n"
         f"printf '%s\\n' \"$*\" >> {git_log}\n"
+        'if [[ "$1" == "-C" && "$3" == "rev-parse" && "$4" == "--git-path" && "$5" == "info/exclude" ]]; then\n'
+        '  printf "%s/.git/info/exclude\\n" "$2"\n'
+        "  exit 0\n"
+        "fi\n"
         'if [[ "$1" == "clone" ]]; then\n'
         '  destination="${@: -1}"\n'
         '  mkdir -p "$destination/scripts"\n'
@@ -230,6 +245,7 @@ def test_client_ship_template_bootstraps_default_local_checkout(tmp_path):
     assert result.returncode == 0, result.stderr
     assert "Fetching btb-pipeline@v1" in result.stdout
     assert git_log.read_text().splitlines() == [
+        f"-C {repo} rev-parse --git-path info/exclude",
         "clone --quiet --config advice.detachedHead=false --depth 1 --branch v1 "
         "https://github.com/btoddb/btb-pipeline.git "
         f"{repo / '.btb-pipeline'}"
@@ -264,7 +280,11 @@ def test_client_ship_template_reuses_existing_local_checkout(tmp_path):
     write_executable(
         fake_git,
         "#!/usr/bin/env bash\n"
-        f"printf '%s\\n' \"$*\" >> {git_log}\n",
+        f"printf '%s\\n' \"$*\" >> {git_log}\n"
+        'if [[ "$1" == "-C" && "$3" == "rev-parse" && "$4" == "--git-path" && "$5" == "info/exclude" ]]; then\n'
+        '  printf "%s/.git/info/exclude\\n" "$2"\n'
+        "  exit 0\n"
+        "fi\n"
     )
     env = os.environ.copy()
     env["PATH"] = f"{fake_bin}:{env['PATH']}"
@@ -275,6 +295,7 @@ def test_client_ship_template_reuses_existing_local_checkout(tmp_path):
     assert result.returncode == 0, result.stderr
     assert "Updating local btb-pipeline checkout" in result.stdout
     assert git_log.read_text().splitlines() == [
+        f"-C {repo} rev-parse --git-path info/exclude",
         f"-C {pipeline_root} fetch --quiet --depth 1 --force origin refs/tags/v1:refs/tags/v1",
         f"-C {pipeline_root} checkout --quiet v1",
     ]
@@ -294,3 +315,43 @@ def test_client_ship_template_rejects_bad_explicit_pipeline_root(tmp_path):
 
     assert result.returncode == 1
     assert "BTB_PIPELINE_ROOT is set" in result.stderr
+
+
+def test_client_ship_template_uses_git_path_for_worktree_exclude(tmp_path):
+    repo, git_dir = make_worktree_client_repo(tmp_path)
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    git_log = tmp_path / "git.log"
+    args_file = tmp_path / "args.txt"
+    fake_git = fake_bin / "git"
+    write_executable(
+        fake_git,
+        "#!/usr/bin/env bash\n"
+        f"printf '%s\\n' \"$*\" >> {git_log}\n"
+        'if [[ "$1" == "-C" && "$3" == "rev-parse" && "$4" == "--git-path" && "$5" == "info/exclude" ]]; then\n'
+        '  printf "%s/info/exclude\\n" "$BTB_FAKE_GIT_DIR"\n'
+        "  exit 0\n"
+        "fi\n"
+        'if [[ "$1" == "clone" ]]; then\n'
+        '  destination="${@: -1}"\n'
+        '  mkdir -p "$destination/scripts"\n'
+        "  cat > \"$destination/scripts/btb-ship-base\" <<'EOF'\n"
+        "#!/usr/bin/env bash\n"
+        'printf \'%s\\n\' "$@" > "$BTB_BASE_ARGS_FILE"\n'
+        "EOF\n"
+        '  chmod +x "$destination/scripts/btb-ship-base"\n'
+        "fi\n",
+    )
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}:{env['PATH']}"
+    env["BTB_BASE_ARGS_FILE"] = str(args_file)
+    env["BTB_FAKE_GIT_DIR"] = str(git_dir)
+
+    result = run([str(repo / "scripts" / "ship"), "--dry-run"], repo, env=env)
+
+    assert result.returncode == 0, result.stderr
+    assert git_log.read_text().splitlines()[0] == f"-C {repo} rev-parse --git-path info/exclude"
+    assert (git_dir / "info" / "exclude").read_text().splitlines() == [
+        "/.btb-pipeline/"
+    ]
+    assert not (repo / ".git" / "info" / "exclude").exists()
