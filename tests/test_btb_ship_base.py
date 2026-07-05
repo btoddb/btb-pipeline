@@ -7,6 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE_SHIP = ROOT / "scripts" / "btb-ship-base"
+SHIP_TEMPLATE = ROOT / "templates" / "ship.template"
 
 
 def run(cmd, cwd, env=None, check=True):
@@ -62,6 +63,16 @@ def make_env(tmp_path):
     env = os.environ.copy()
     env["PATH"] = f"{fake_bin}:{env['PATH']}"
     return env, gh_log
+
+
+def make_client_repo(tmp_path):
+    repo = tmp_path / "client-repo"
+    scripts_dir = repo / "scripts"
+    git_info = repo / ".git" / "info"
+    scripts_dir.mkdir(parents=True)
+    git_info.mkdir(parents=True)
+    shutil.copy2(SHIP_TEMPLATE, scripts_dir / "ship")
+    return repo
 
 
 def test_runs_hooks_in_order_and_creates_release_commit(tmp_path):
@@ -186,3 +197,100 @@ def test_pipeline_ship_wrapper_delegates_to_base_and_floats_v1(tmp_path):
 
     assert "create immutable tag v1.0.1" in result.stdout
     assert f"DRY-RUN: git -C {repo} tag -f v1 " in result.stdout
+
+
+def test_client_ship_template_bootstraps_default_local_checkout(tmp_path):
+    repo = make_client_repo(tmp_path)
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    git_log = tmp_path / "git.log"
+    args_file = tmp_path / "args.txt"
+    fake_git = fake_bin / "git"
+    write_executable(
+        fake_git,
+        "#!/usr/bin/env bash\n"
+        f"printf '%s\\n' \"$*\" >> {git_log}\n"
+        'if [[ "$1" == "clone" ]]; then\n'
+        '  destination="${@: -1}"\n'
+        '  mkdir -p "$destination/scripts"\n'
+        "  cat > \"$destination/scripts/btb-ship-base\" <<'EOF'\n"
+        "#!/usr/bin/env bash\n"
+        'printf \'%s\\n\' "$@" > "$BTB_BASE_ARGS_FILE"\n'
+        "EOF\n"
+        '  chmod +x "$destination/scripts/btb-ship-base"\n'
+        "fi\n",
+    )
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}:{env['PATH']}"
+    env["BTB_BASE_ARGS_FILE"] = str(args_file)
+    env.pop("BTB_PIPELINE_ROOT", None)
+
+    result = run([str(repo / "scripts" / "ship"), "--dry-run"], repo, env=env)
+
+    assert result.returncode == 0, result.stderr
+    assert "Fetching btb-pipeline@v1" in result.stdout
+    assert git_log.read_text().splitlines() == [
+        "clone --quiet --config advice.detachedHead=false --depth 1 --branch v1 "
+        "https://github.com/btoddb/btb-pipeline.git "
+        f"{repo / '.btb-pipeline'}"
+    ]
+    assert args_file.read_text().splitlines() == [
+        "--repo-root",
+        str(repo),
+        "--dry-run",
+    ]
+    assert (repo / ".git" / "info" / "exclude").read_text().splitlines() == [
+        "/.btb-pipeline/"
+    ]
+
+
+def test_client_ship_template_reuses_existing_local_checkout(tmp_path):
+    repo = make_client_repo(tmp_path)
+    pipeline_root = repo / ".btb-pipeline"
+    scripts_dir = pipeline_root / "scripts"
+    scripts_dir.mkdir(parents=True)
+    (pipeline_root / ".git").mkdir()
+    args_file = tmp_path / "args.txt"
+    write_executable(
+        scripts_dir / "btb-ship-base",
+        "#!/usr/bin/env bash\n"
+        'printf \'%s\\n\' "$@" > "$BTB_BASE_ARGS_FILE"\n',
+    )
+
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    git_log = tmp_path / "git.log"
+    fake_git = fake_bin / "git"
+    write_executable(
+        fake_git,
+        "#!/usr/bin/env bash\n"
+        f"printf '%s\\n' \"$*\" >> {git_log}\n",
+    )
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}:{env['PATH']}"
+    env["BTB_BASE_ARGS_FILE"] = str(args_file)
+
+    result = run([str(repo / "scripts" / "ship"), "--dry-run"], repo, env=env)
+
+    assert result.returncode == 0, result.stderr
+    assert "Updating local btb-pipeline checkout" in result.stdout
+    assert git_log.read_text().splitlines() == [
+        f"-C {pipeline_root} fetch --quiet --depth 1 --force origin refs/tags/v1:refs/tags/v1",
+        f"-C {pipeline_root} checkout --quiet v1",
+    ]
+    assert args_file.read_text().splitlines() == [
+        "--repo-root",
+        str(repo),
+        "--dry-run",
+    ]
+
+
+def test_client_ship_template_rejects_bad_explicit_pipeline_root(tmp_path):
+    repo = make_client_repo(tmp_path)
+    env = os.environ.copy()
+    env["BTB_PIPELINE_ROOT"] = str(tmp_path / "missing-pipeline")
+
+    result = run([str(repo / "scripts" / "ship"), "--dry-run"], repo, env=env, check=False)
+
+    assert result.returncode == 1
+    assert "BTB_PIPELINE_ROOT is set" in result.stderr

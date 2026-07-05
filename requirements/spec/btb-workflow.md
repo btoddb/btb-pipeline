@@ -85,28 +85,35 @@
    repository root with `BTB_PIPELINE_ROOT` pointing at the checked-out pipeline.
    If `scripts/ship` is missing, ship runs `.btb-pipeline/scripts/btb-ship-base`
    directly against the repository root.
-8. **constraint BW-12** `scripts/btb-ship-base` owns common release mechanics:
+8. **constraint BW-28** The shared client `templates/ship.template` wrapper must
+   support local runs outside GitHub Actions by bootstrapping
+   `btoddb/btb-pipeline@v1` into `<repo>/.btb-pipeline` when the default local
+   checkout is missing, and it must add `/.btb-pipeline/` to the client's
+   `.git/info/exclude` so the cached shared checkout does not dirty the working
+   tree. If `BTB_PIPELINE_ROOT` is set explicitly, missing base-command paths
+   fail fast instead of being replaced.
+9. **constraint BW-12** `scripts/btb-ship-base` owns common release mechanics:
    version/tag resolution, clean-main validation, duplicate-tag checks, optional
    `VERSION` updates, release commit creation when files changed, pushing
    `main`, creating the immutable version tag, and creating the GitHub release.
-9. **constraint BW-13** The base release command supports repo-local executable
+10. **constraint BW-13** The base release command supports repo-local executable
    hooks under `scripts/ship.d/` named `before-version`, `after-version`,
    `before-release-commit`, `after-release-commit`, `before-github-release`, and
    `after-github-release`. Hooks receive `BTB_REPO_ROOT`, `BTB_VERSION_TAG`,
    `BTB_PUBLIC_RELEASE`, `BTB_DRY_RUN`, `BTB_BUMP`, and
    `BTB_RELEASE_COMMIT_CREATED`.
-10. **constraint BW-14** Client release commands and the base release command
+11. **constraint BW-14** Client release commands and the base release command
    must support `--public-release`, `--bump-patch`, `--bump-minor`,
    `--bump-major`, and `--dry-run`; `--set-version vX.Y.Z` remains supported for
    explicit releases. The workflow forwards all non-`--force` ship arguments to
    the release command. Non-public releases create a pre-release titled
    `<tag>-beta`, and exactly one version option is required.
-11. **constraint BW-27** `scripts/ship` in `btoddb/btb-pipeline` uses the shared
+12. **constraint BW-27** `scripts/ship` in `btoddb/btb-pipeline` uses the shared
    base release command, requires releases to stay under the `v1` major line,
    and then floats the lightweight `v1` major tag directly to the released
    commit. When it runs in GitHub Actions, it skips the interactive confirmation
    prompt automatically.
-12. **constraint BW-15** On any ship failure, including preflight, merge, and
+13. **constraint BW-15** On any ship failure, including preflight, merge, and
     release-hook failures, the `report-failure` action tags the maintainer with
     the phase name `Ship`.
 
