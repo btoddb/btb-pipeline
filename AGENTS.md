@@ -20,6 +20,11 @@ short pointers only.
 - When a fix needs to reach client repositories, release this repository and move
   the floating `v1` tag as part of the ship flow.
 
+## Python
+
+**constraint** Use requirements.txt to bootstrap dependencies
+**constraint** Run pytest before committing any changes
+
 <!--
 
   This is the shared generic AGENTS config.  Paste this in your repo's AGENTS.md file.
