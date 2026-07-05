@@ -1,0 +1,388 @@
+#!/usr/bin/env bash
+#
+# Shared release mechanics for /btbai ship.
+#
+# Client repositories may keep a tiny scripts/ship wrapper that calls this
+# command and put repo-local customization in executable hooks under
+# scripts/ship.d/.
+#
+# Usage:
+#   btb-ship-base --repo-root /path/to/repo --bump-patch
+#   btb-ship-base --repo-root /path/to/repo --public-release --bump-minor
+#   btb-ship-base --repo-root /path/to/repo --set-version v1.2.3
+#
+set -euo pipefail
+
+MAIN_BRANCH="main"
+REMOTE="origin"
+PUBLIC_RELEASE=false
+DRY_RUN=false
+ASSUME_YES=false
+BUMP=""
+VERSION_TAG=""
+VERSION_SET=false
+REPO_ROOT=""
+HOOK_DIR=""
+METADATA_FILE=""
+REQUIRE_MAJOR=""
+RELEASE_COMMIT_CREATED=false
+
+die() {
+    echo "btb-ship-base: $*" >&2
+    exit 1
+}
+
+usage() {
+    sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+set_bump() {
+    if "$VERSION_SET"; then
+        echo "btb-ship-base: choose only one version option" >&2
+        exit 2
+    fi
+    BUMP="$1"
+    VERSION_SET=true
+}
+
+set_version() {
+    if "$VERSION_SET"; then
+        echo "btb-ship-base: choose only one version option" >&2
+        exit 2
+    fi
+    if [[ $# -ne 1 || -z "$1" ]]; then
+        echo "btb-ship-base: --set-version requires a value (e.g. --set-version v1.2.3)" >&2
+        exit 2
+    fi
+    VERSION_TAG="v${1#v}"
+    VERSION_SET=true
+}
+
+normalize_path() {
+    local path="$1"
+    if [[ "$path" = /* ]]; then
+        printf '%s\n' "$path"
+    else
+        printf '%s/%s\n' "$PWD" "$path"
+    fi
+}
+
+run() {
+    if "$DRY_RUN"; then
+        echo "DRY-RUN: $*"
+    else
+        echo "+ $*"
+        "$@"
+    fi
+}
+
+run_in_repo() {
+    if "$DRY_RUN"; then
+        echo "DRY-RUN: (cd $REPO_ROOT && $*)"
+    else
+        echo "+ (cd $REPO_ROOT && $*)"
+        (cd "$REPO_ROOT" && "$@")
+    fi
+}
+
+git_repo() {
+    git -C "$REPO_ROOT" "$@"
+}
+
+bump_version() {
+    local current="$1"
+    local bump="$2"
+    local major minor patch
+
+    if [[ ! "$current" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+        die "version '$current' is invalid - must look like v1.2.3"
+    fi
+
+    major="${BASH_REMATCH[1]}"
+    minor="${BASH_REMATCH[2]}"
+    patch="${BASH_REMATCH[3]}"
+
+    case "$bump" in
+        patch) printf 'v%s.%s.%s\n' "$major" "$minor" "$((10#$patch + 1))" ;;
+        minor) printf 'v%s.%s.0\n' "$major" "$((10#$minor + 1))" ;;
+        major) printf 'v%s.0.0\n' "$((10#$major + 1))" ;;
+        *) die "unknown bump type '$bump'" ;;
+    esac
+}
+
+latest_semver_tag() {
+    git_repo tag --list 'v*' --sort=-v:refname \
+        | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+        | head -n 1 || true
+}
+
+resolve_version() {
+    local version_file="$REPO_ROOT/VERSION"
+    local raw latest
+
+    if [[ -n "$VERSION_TAG" ]]; then
+        return
+    fi
+
+    if [[ -f "$version_file" ]]; then
+        raw="$(tr -d '[:space:]' < "$version_file")"
+        raw="v${raw#v}"
+        VERSION_TAG="$(bump_version "$raw" "$BUMP")"
+        return
+    fi
+
+    latest="$(latest_semver_tag)"
+    if [[ -z "$latest" ]]; then
+        VERSION_TAG="v0.1.0"
+    else
+        VERSION_TAG="$(bump_version "$latest" "$BUMP")"
+    fi
+}
+
+write_version_file() {
+    local version_file="$REPO_ROOT/VERSION"
+    if [[ ! -f "$version_file" ]]; then
+        return
+    fi
+    if "$DRY_RUN"; then
+        echo "DRY-RUN: update VERSION to $VERSION_TAG"
+        return
+    fi
+    printf '%s\n' "$VERSION_TAG" > "$version_file"
+}
+
+export_hook_env() {
+    export BTB_REPO_ROOT="$REPO_ROOT"
+    export BTB_VERSION_TAG="$VERSION_TAG"
+    export BTB_PUBLIC_RELEASE="$PUBLIC_RELEASE"
+    export BTB_DRY_RUN="$DRY_RUN"
+    export BTB_BUMP="$BUMP"
+    export BTB_RELEASE_COMMIT_CREATED="$RELEASE_COMMIT_CREATED"
+}
+
+run_hook() {
+    local hook_name="$1"
+    local hook_path="$HOOK_DIR/$hook_name"
+
+    if [[ ! -x "$hook_path" ]]; then
+        return
+    fi
+
+    export_hook_env
+    if "$DRY_RUN"; then
+        echo "DRY-RUN: $hook_path"
+    else
+        echo "+ $hook_path"
+        (cd "$REPO_ROOT" && "$hook_path")
+    fi
+}
+
+write_metadata() {
+    if [[ -z "$METADATA_FILE" ]]; then
+        return
+    fi
+    {
+        printf 'BTB_VERSION_TAG=%q\n' "$VERSION_TAG"
+        printf 'BTB_REPO_ROOT=%q\n' "$REPO_ROOT"
+        printf 'BTB_PUBLIC_RELEASE=%q\n' "$PUBLIC_RELEASE"
+        printf 'BTB_DRY_RUN=%q\n' "$DRY_RUN"
+        printf 'BTB_RELEASE_COMMIT_CREATED=%q\n' "$RELEASE_COMMIT_CREATED"
+    } > "$METADATA_FILE"
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --repo-root)
+            shift
+            [[ $# -gt 0 && -n "${1:-}" ]] || die "--repo-root requires a path"
+            REPO_ROOT="$(normalize_path "$1")"
+            ;;
+        --repo-root=*)
+            REPO_ROOT="$(normalize_path "${1#*=}")"
+            ;;
+        --hook-dir)
+            shift
+            [[ $# -gt 0 && -n "${1:-}" ]] || die "--hook-dir requires a path"
+            HOOK_DIR="$(normalize_path "$1")"
+            ;;
+        --hook-dir=*)
+            HOOK_DIR="$(normalize_path "${1#*=}")"
+            ;;
+        --metadata-file)
+            shift
+            [[ $# -gt 0 && -n "${1:-}" ]] || die "--metadata-file requires a path"
+            METADATA_FILE="$(normalize_path "$1")"
+            ;;
+        --metadata-file=*)
+            METADATA_FILE="$(normalize_path "${1#*=}")"
+            ;;
+        --require-major)
+            shift
+            [[ $# -gt 0 && -n "${1:-}" ]] || die "--require-major requires a value like v1"
+            REQUIRE_MAJOR="v${1#v}"
+            ;;
+        --require-major=*)
+            REQUIRE_MAJOR="v${1#*=}"
+            REQUIRE_MAJOR="v${REQUIRE_MAJOR#v}"
+            ;;
+        --public-release)
+            PUBLIC_RELEASE=true
+            ;;
+        --bump-patch)
+            set_bump patch
+            ;;
+        --bump-minor)
+            set_bump minor
+            ;;
+        --bump-major)
+            set_bump major
+            ;;
+        --set-version)
+            shift
+            [[ $# -gt 0 && "${1:-}" != --* ]] || die "--set-version requires a value (e.g. --set-version v1.2.3)"
+            set_version "$1"
+            ;;
+        --set-version=*)
+            set_version "${1#*=}"
+            ;;
+        --dry-run)
+            DRY_RUN=true
+            ;;
+        --yes|-y)
+            ASSUME_YES=true
+            ;;
+        --force)
+            # The workflow consumes --force before invoking this script; tolerate
+            # it if forwarded by an older caller.
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "btb-ship-base: unknown argument '$1' (try --help)" >&2
+            exit 2
+            ;;
+    esac
+    shift
+done
+
+if [[ -z "$REPO_ROOT" ]]; then
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    REPO_ROOT="$(cd "$script_dir/.." && pwd)"
+fi
+
+if [[ -z "$HOOK_DIR" ]]; then
+    HOOK_DIR="$REPO_ROOT/scripts/ship.d"
+fi
+
+if ! "$VERSION_SET"; then
+    die "choose a version option: --set-version vX.Y.Z, --bump-patch, --bump-minor, or --bump-major"
+fi
+
+branch="$(git_repo rev-parse --abbrev-ref HEAD)"
+[[ "$branch" == "$MAIN_BRANCH" ]] || die "must be on '$MAIN_BRANCH' (currently on '$branch')"
+
+if [[ -n "$(git_repo status --porcelain)" ]]; then
+    echo "btb-ship-base: working tree is not clean - commit or stash first" >&2
+    git_repo status --short
+    exit 1
+fi
+
+if "$DRY_RUN"; then
+    echo "DRY-RUN: git -C $REPO_ROOT fetch --quiet $REMOTE $MAIN_BRANCH"
+else
+    git_repo fetch --quiet "$REMOTE" "$MAIN_BRANCH" || die "could not fetch $REMOTE/$MAIN_BRANCH"
+    if ! git_repo merge-base --is-ancestor "$REMOTE/$MAIN_BRANCH" HEAD; then
+        die "local $MAIN_BRANCH is behind $REMOTE/$MAIN_BRANCH - pull/rebase before shipping"
+    fi
+fi
+
+run_hook before-version
+resolve_version
+
+if [[ ! "$VERSION_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    die "version tag '$VERSION_TAG' is invalid - must look like v1.2.3"
+fi
+
+if [[ -n "$REQUIRE_MAJOR" && "$VERSION_TAG" != "$REQUIRE_MAJOR".* ]]; then
+    die "resolved tag '$VERSION_TAG' must stay under the $REQUIRE_MAJOR line"
+fi
+
+run_hook after-version
+
+if git_repo rev-parse -q --verify "refs/tags/$VERSION_TAG" >/dev/null; then
+    die "tag '$VERSION_TAG' already exists locally"
+fi
+
+if ! "$DRY_RUN" && git_repo ls-remote --tags "$REMOTE" "refs/tags/$VERSION_TAG" | grep -q .; then
+    die "tag '$VERSION_TAG' already exists on remote"
+fi
+
+short_sha="$(git_repo rev-parse --short HEAD)"
+echo "About to release $MAIN_BRANCH@$short_sha:"
+echo "  - push $REMOTE/$MAIN_BRANCH"
+echo "  - create immutable tag $VERSION_TAG"
+if "$PUBLIC_RELEASE"; then
+    echo "  - create public GitHub release $VERSION_TAG (latest)"
+else
+    echo "  - create GitHub pre-release $VERSION_TAG (title: ${VERSION_TAG}-beta)"
+fi
+
+[[ "${GITHUB_ACTIONS:-}" == "true" ]] && ASSUME_YES=true
+
+if ! "$DRY_RUN" && ! "$ASSUME_YES"; then
+    printf 'Proceed? [y/N] '
+    read -r reply
+    case "$reply" in
+        [yY]|[yY][eE][sS]) ;;
+        *) die "aborted" ;;
+    esac
+fi
+
+run_hook before-release-commit
+write_version_file
+
+if [[ -n "$(git_repo status --porcelain)" ]]; then
+    run git -C "$REPO_ROOT" add -A
+    run git -C "$REPO_ROOT" commit -m "release $VERSION_TAG"
+    RELEASE_COMMIT_CREATED=true
+fi
+
+run_hook after-release-commit
+
+if [[ -n "$(git_repo status --porcelain)" ]]; then
+    echo "btb-ship-base: working tree changed after the release commit" >&2
+    git_repo status --short
+    exit 1
+fi
+
+release_sha="$(git_repo rev-parse HEAD)"
+write_metadata
+
+run git -C "$REPO_ROOT" push "$REMOTE" "$MAIN_BRANCH"
+if "$PUBLIC_RELEASE"; then
+    tag_message="Release $VERSION_TAG"
+else
+    tag_message="Pre-release $VERSION_TAG"
+fi
+run git -C "$REPO_ROOT" tag -a "$VERSION_TAG" -m "$tag_message"
+run git -C "$REPO_ROOT" push "$REMOTE" "$VERSION_TAG"
+
+run_hook before-github-release
+
+if "$PUBLIC_RELEASE"; then
+    run_in_repo gh release create "$VERSION_TAG" \
+        --title "$VERSION_TAG" \
+        --latest \
+        --generate-notes
+else
+    run_in_repo gh release create "$VERSION_TAG" \
+        --title "$VERSION_TAG-beta" \
+        --prerelease \
+        --generate-notes
+fi
+
+run_hook after-github-release
+
+echo "Done. Release '$VERSION_TAG' is live at ${release_sha:0:12}."

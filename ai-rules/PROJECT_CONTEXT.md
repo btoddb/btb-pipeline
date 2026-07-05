@@ -17,6 +17,13 @@ Do not paste the full shared contract into `CLAUDE.md`, `AGENTS.md`, client
 `ai-rules`, or templates. Those files should contain local repo guidance and
 short pointers only.
 
+## Ship mechanics
+
+Common `/btbai ship` release mechanics live in `scripts/btb-ship-base`. Client
+repositories should customize release behavior with executable
+`scripts/ship.d/` hooks or a thin `scripts/ship` wrapper, not by copying the
+full base release script.
+
 ## Agent rules
 
 - Treat `templates/` as client bootstrap material, not another source of truth
