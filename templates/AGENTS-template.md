@@ -1,25 +1,3 @@
-# Agents
-
-
-## Shared agent contract
-
-The shared `/btbai` command contract is injected at runtime from the
-`SHARED_AGENT_CONTRACT` environment value in `.github/workflows/btb.yml`.
-Update that workflow value, the executable workflow behavior, and
-`requirements/spec/btb-workflow.md` together when command semantics or phase
-boundaries change.
-
-Do not paste the full shared contract into `CLAUDE.md`, `AGENTS.md`, client
-`ai-rules`, or templates. Those files should contain local repo guidance and
-short pointers only.
-
-## Agent rules
-
-- Treat `templates/` as client bootstrap material, not another source of truth
-  for shared pipeline behavior.
-- When a fix needs to reach client repositories, release this repository and move
-  the floating `v1` tag as part of the ship flow.
-
 <!--
 
   This is the shared generic AGENTS config.  Paste this in your repo's AGENTS.md file.
