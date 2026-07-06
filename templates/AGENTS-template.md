@@ -13,7 +13,7 @@ This file provides guidance to AI agents for working with code in this repositor
 **constraint** Add new general project rules to [PROJECT_CONTEXT.md](./ai-rules/PROJECT_CONTEXT.md).
 **suggestion** If a new feature has a lot of new rules, create a new rule file in [ai-rules](./ai-rules/), purely for organization.  Otherwise add it to PROJECT_CONTEXT.md
 
-- If you can't make a required change, give clear instructions on how I must manually change it.  Assume I'm a 5 year old that knows how to read and write, but I know nothing else.
+**constraint** If you can't make a required change (for instance, github restriction), give clear instructions on how I must manually change it.  Assume I'm a 5 year old that knows how to read and write, but I know nothing else.
 
 ## New Code
 
@@ -34,5 +34,6 @@ This file provides guidance to AI agents for working with code in this repositor
   - For Typescript, use Vitest
   - For Java, use JUnit 6
   - For Python, use Pytest
+- Prefer readability and maintainability over optimization unless the optimization show real value and isn't simply academic
 
 <!-- end of shared AGENTS.md -->
