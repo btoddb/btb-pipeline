@@ -27,6 +27,6 @@ short pointers only.
 
 ## Shared client rules
 
-**constraint** Follow all the rules in every file under [client-rules](./client-rules/) — this repository consumes the same shared rules it distributes to client repos.
+**constraint** Follow all the rules in every file directly under [client-rules](./client-rules/) — this repository consumes the same shared rules it distributes to client repos. Files under `client-rules/optional/` are opt-in topic rules for client repos and do not apply here unless a local `ai-rules/` file points to one.
 
 `client-rules/` is the single source of truth for shared agent rules. Edit rules there; never paste them into this file, templates, or client repos. Changes reach clients when the floating `v1` tag moves (ship flow).
