@@ -29,7 +29,7 @@
 
 1. **constraint CR-6** Client `AGENTS.md`, `CLAUDE.md`, and
    `.clinerules/one-rule.md` must contain pointers only — a short constraint
-   directing the agent to follow every file under
+   directing the agent to follow every file directly under
    `.btb-pipeline/client-rules/` (bootstrapping it first if missing) — and
    must never contain the shared rule text itself.
 2. **constraint CR-7** This mechanism must be agent-agnostic: the same
@@ -47,3 +47,17 @@
    tag (for example `v2`) rather than a breaking change under the floating
    `v1` tag. Client repositories opt into the new major version by updating
    the tag reference in their bootstrap commands.
+
+## Optional topic rules
+
+1. **constraint CR-10** Opt-in topic rules (for example, Home Assistant
+   integration rules) live under `client-rules/optional/`, one file per
+   topic. They are not part of the universal set: clients must not follow
+   them automatically.
+2. **constraint CR-11** A client opts into a topic by committing a short
+   pointer file in its local `ai-rules/` that directs agents to the topic
+   file under `.btb-pipeline/client-rules/optional/`. Topic rule text itself
+   must never be pasted into client repos.
+3. **constraint CR-12** Topic rule files must stay generic: repo-specific
+   facts (integration name, exact script names, test paths) belong in each
+   client's local `ai-rules/`, not in the shared topic file.
