@@ -17,6 +17,7 @@ Spec files:
 | File | Area |
 |---|---|
 | [`spec/btb-workflow.md`](spec/btb-workflow.md) | `/btbai` workflow behavior |
+| [`spec/client-rules.md`](spec/client-rules.md) | Shared client AI-agent rules distribution |
 
 ## How to write requirements (for humans)
 

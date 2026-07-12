@@ -54,6 +54,11 @@ gh secret set CLAUDE_CODE_OAUTH_TOKEN --app actions --repo btoddb/<repo>
 - templates/btb-client.template.yml to <repo>/.github/workflows/btb-client.yml,
   filling in the `with:` block (`maintainer`, `setup`, language version,
   `install-command`, and any `*-allowed-tools` the repo needs) for that repo
+- templates/AGENTS-template.md to <repo>/AGENTS.md, once, as a thin pointer.
+  Shared agent rules are auto-delivered via the gitignored `.btb-pipeline/`
+  checkout at tag `v1`; never paste them into the client repo.
+- templates/CLAUDE-template.md to <repo>/CLAUDE.md
+- templates/clinerules-template.md to <repo>/.clinerules/one-rule.md, for Cline
 - templates/PROJECT_CONTEXT-pipeline.md to <repo>/ai-rules/PROJECT_CONTEXT.md
   only as a local-rules starter. Do not paste the shared `/btbai` command
   contract into client repos; the reusable workflow injects that at runtime.
