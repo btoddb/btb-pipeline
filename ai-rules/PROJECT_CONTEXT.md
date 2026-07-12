@@ -24,6 +24,12 @@ repositories should customize release behavior with executable
 `scripts/ship.d/` hooks or a thin `scripts/ship` wrapper, not by copying the
 full base release script.
 
+## Shared client rules
+
+`client-rules/` is the source of truth for shared client AI rules, delivered
+to clients via their gitignored `.btb-pipeline/` checkout at tag `v1`. Update
+rules there and release (move `v1`) instead of editing client repos.
+
 ## Agent rules
 
 - Treat `templates/` as client bootstrap material, not another source of truth
@@ -32,11 +38,5 @@ full base release script.
   the floating `v1` tag as part of the ship flow.
 
 - Follow every file in `ai-rules/` before editing.
-- Work on a fresh branch from `main`; never edit directly on `main`.
 - Keep the living spec in `requirements/spec/` synchronized with workflow
   behavior changes.
-- For new code, always create a unit test
-  - For Typescript, use Vitest
-  - For Java, use JUnit 6
-  - For Python, use Pytest
-- If you can't make a needed change, give clear instructions on how I must manually change it.  Assume I'm a 5 year old that knows how to write, but I know nothing else.

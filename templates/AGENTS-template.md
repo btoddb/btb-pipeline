@@ -1,39 +1,30 @@
 <!--
-
-  This is the shared generic AGENTS config.  Paste this in your repo's AGENTS.md file.
-
-  !!! DO NOT CHANGE ANYTHING BETWEEN THIS COMMENT AND THE END COMMENT !!!
-
- -->
+  Client AGENTS.md pointer. Copy this file ONCE to <repo>/AGENTS.md.
+  Shared rules live in btoddb/btb-pipeline/client-rules/ and are delivered via
+  the gitignored .btb-pipeline/ checkout at tag v1 — never paste them here.
+-->
 # General Agent Rules
 
-This file provides guidance to AI agents for working with code in this repository.
+This file provides guidance to AI agents (Claude Code, OpenAI Codex, Cline, and others) for working with code in this repository.
 
-**constraint** Follow all the rules in all files in directory, [ai-rules](./ai-rules/).
-**constraint** Add new general project rules to [PROJECT_CONTEXT.md](./ai-rules/PROJECT_CONTEXT.md).
-**suggestion** If a new feature has a lot of new rules, create a new rule file in [ai-rules](./ai-rules/), purely for organization.  Otherwise add it to PROJECT_CONTEXT.md
+**constraint** Follow all the rules in every file under [.btb-pipeline/client-rules/](./.btb-pipeline/client-rules/). If that directory is missing or stale, bootstrap it first (see below).
+**constraint** Follow all the rules in all files in directory, [ai-rules](./ai-rules/) — these are this repo's local rules.
+**constraint** Add new repo-local rules to [PROJECT_CONTEXT.md](./ai-rules/PROJECT_CONTEXT.md). Propose changes to shared rules in btoddb/btb-pipeline instead of editing them here.
 
-**constraint** If you can't make a required change (for instance, github restriction), give clear instructions on how I must manually change it.  Assume I'm a 5 year old that knows how to read and write, but I know nothing else.
+## Bootstrap the shared rules
 
-## New Code
+If `.btb-pipeline/` is missing:
 
-**constraint** With all new code written, a unit test case must also be added.  Old code in the same file that doesn't have coverage should be left untested, but produce a note in the plan or result.  Untested code in unrelated files should be left untested and without a note.
+    git clone --quiet --config advice.detachedHead=false --depth 1 --branch v1 \
+        https://github.com/btoddb/btb-pipeline.git .btb-pipeline
 
-## Git
+If it already exists, refresh it:
 
-- Work on a fresh branch from `main`; never edit directly on `main`.
+    git -C .btb-pipeline fetch --quiet --depth 1 --force origin refs/tags/v1:refs/tags/v1
+    git -C .btb-pipeline checkout --quiet v1
 
-## Specs
+Then ensure the checkout stays untracked:
 
-- Keep the living spec in `requirements/spec/` synchronized with workflow
-  behavior changes.
-
-## Coding
-
-- For new code, always create a unit test
-  - For Typescript, use Vitest
-  - For Java, use JUnit 6
-  - For Python, use Pytest
-- Prefer readability and maintainability over optimization unless the optimization show real value and isn't simply academic
-
-<!-- end of shared AGENTS.md -->
+    exclude_file="$(git rev-parse --git-path info/exclude)"
+    mkdir -p "$(dirname "$exclude_file")" && touch "$exclude_file"
+    grep -Fxq '/.btb-pipeline/' "$exclude_file" || printf '%s\n' '/.btb-pipeline/' >> "$exclude_file"

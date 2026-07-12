@@ -20,13 +20,6 @@ Keep those local rules short and specific. When the shared pipeline behavior
 changes, update `btoddb/btb-pipeline` and release the moving `v1` tag instead
 of editing every client repository.
 
-## Agent rules
-
-- Follow every file in `ai-rules/` before editing.
-- Work on a fresh branch from `main`; never edit directly on `main`.
-- Keep the living spec in `requirements/spec/` synchronized with project
-  behavior changes.
-- For new code, always create a unit test
-  - For Typescript, use Vitest
-  - For Java, use JUnit 6
-  - For Python, use Pytest
+Shared agent rules (Git, GitHub, coding conventions, etc.) arrive via
+`.btb-pipeline/client-rules/`, bootstrapped per this repo's `AGENTS.md`. Do
+not copy that content into this client repository.
